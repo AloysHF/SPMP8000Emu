@@ -7,6 +7,7 @@
 <p align="center">
   <a href="https://jiangxincode.github.io/SPMP8000Emu/"><img src="https://img.shields.io/badge/Website-SPMP8000Emu-E8553A?logo=githubpages&logoColor=white" alt="Website"></a>
   <a href="https://github.com/jiangxincode/SPMP8000Emu/actions/workflows/ci.yml"><img src="https://github.com/jiangxincode/SPMP8000Emu/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://git.libretro.com/libretro/spmp8000emu/-/pipelines"><img src="https://img.shields.io/gitlab/pipeline-status/spmp8000emu?gitlab_url=https%3A%2F%2Fgit.libretro.com%2Flibretro&branch=master&logo=gitlab&label=Pipeline%20Status" alt="Gitlab Pipeline Status" ></a>
   <a href="https://github.com/jiangxincode/SPMP8000Emu/releases/latest"><img src="https://img.shields.io/github/v/release/jiangxincode/SPMP8000Emu" alt="Release"></a>
   <a href="https://github.com/jiangxincode/SPMP8000Emu/releases"><img src="https://img.shields.io/github/downloads/jiangxincode/SPMP8000Emu/total" alt="Downloads"></a>
   <a href="https://sonarcloud.io/dashboard?id=jiangxincode_SPMP8000Emu"><img src="https://sonarcloud.io/api/project_badges/measure?project=jiangxincode_SPMP8000Emu&metric=alert_status" alt="Quality Gate Status"></a>
