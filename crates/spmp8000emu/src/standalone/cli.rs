@@ -33,7 +33,7 @@ pub struct Cli {
     pub game_path: PathBuf,
 
     /// Window scale factor (1-8)
-    #[arg(short, long, default_value = "2", value_parser = clap::value_parser!(u32).range(1..=8))]
+    #[arg(short, long, default_value = "1", value_parser = clap::value_parser!(u32).range(1..=8))]
     pub scale: u32,
 
     /// Fullscreen mode

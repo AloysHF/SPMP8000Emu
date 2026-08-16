@@ -36,7 +36,7 @@ spmp8000-emu [OPTIONS] <GAME_PATH>
 | Option | Value | Default | Description |
 |---|---|---|---|
 | `<GAME_PATH>` | path | *required* | Path to the game file (`.bin`). |
-| `-s, --scale <N>` | `1`–`8` | `2` | Integer scaling factor for the window. |
+| `-s, --scale <N>` | `1`–`8` | `1` | Integer scaling factor for the window. |
 | `-f, --fullscreen` | flag | off | Run in fullscreen mode. |
 | `--filter <FILTER>` | `nearest`, `bilinear`, `bicubic`, `xbrz` | `nearest` | Select the display scaling filter. |
 | `-v, --volume <N>` | `0`–`100` | `100` | Volume level (`0` = mute, `100` = original). |
@@ -66,6 +66,9 @@ diagonals while retaining hard edges. For example:
 ```bash
 spmp8000-emu --scale 4 --filter xbrz path/to/game.bin
 ```
+
+The window opens at the game's native resolution (`--scale 1`) by default; use
+`--scale <N>` to open it enlarged.
 
 The window can be resized at runtime. All filters preserve the native aspect
 ratio and center the image with black bars when the window or fullscreen
