@@ -124,7 +124,7 @@ impl DisplayScaler {
 /// The framebuffer stores pixels in little-endian XRGB8888 byte order [B, G, R, X].
 pub fn rgba_to_xrgb(src: &[u8], dst: &mut Vec<u32>) {
     dst.resize(src.len() / 4, 0);
-    for (pixel, bytes) in dst.iter_mut().zip(src.chunks_exact(4)) {
+    for (pixel, bytes) in dst.iter_mut().zip(src.as_chunks::<4>().0.iter()) {
         *pixel = ((bytes[2] as u32) << 16) | ((bytes[1] as u32) << 8) | bytes[0] as u32;
     }
 }

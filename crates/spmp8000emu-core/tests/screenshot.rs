@@ -64,7 +64,7 @@ fn frame_has_content(framebuffer: &[u8]) -> bool {
         return false;
     }
     let first = &framebuffer[..4];
-    framebuffer.chunks_exact(4).any(|px| px != first)
+    framebuffer.as_chunks::<4>().0.iter().any(|px| px != first)
 }
 
 /// Run a single game for `FRAMES` frames. Returns Ok(true) if the final frame

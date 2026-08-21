@@ -116,7 +116,7 @@ type SubKeys = [[u8; 48]; 16];
 fn decrypt_ngame_payload(data: &[u8]) -> Vec<u8> {
     let mut output = data.to_vec();
     let subkeys = set_subkeys(&NGAME_DES_KEY);
-    for block in output[..NGAME_ENCRYPTED_PREFIX_LEN].chunks_exact_mut(8) {
+    for block in output[..NGAME_ENCRYPTED_PREFIX_LEN].as_chunks_mut::<8>().0 {
         let mut input = [0u8; 8];
         input.copy_from_slice(block);
         block.copy_from_slice(&des_block(input, &subkeys, false));
