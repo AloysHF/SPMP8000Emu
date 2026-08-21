@@ -17,7 +17,7 @@ SPMP8000 games on iPhone / iPad.
   - Version 1.17.0 is recommended; newer versions have a different folder
     structure that makes manual injection more complex
 - Download `spmp8000-emu-ios-libretro.tar.gz` from the
-  [Releases](https://github.com/jiangxincode/SPMP8000Emu/releases) page. It
+  [Releases](https://github.com/AloysHF/SPMP8000Emu/releases) page. It
   contains:
   - `spmp8000emu_libretro_ios.dylib` — core binary (real devices: arm64 + x86_64
     universal)

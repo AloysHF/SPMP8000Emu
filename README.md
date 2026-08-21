@@ -5,12 +5,12 @@
 </p>
 
 <p align="center">
-  <a href="https://jiangxincode.github.io/SPMP8000Emu/"><img src="https://img.shields.io/badge/Website-SPMP8000Emu-E8553A?logo=githubpages&logoColor=white" alt="Website"></a>
-  <a href="https://github.com/jiangxincode/SPMP8000Emu/actions/workflows/ci.yml"><img src="https://github.com/jiangxincode/SPMP8000Emu/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://aloyshf.github.io/SPMP8000Emu/"><img src="https://img.shields.io/badge/Website-SPMP8000Emu-E8553A?logo=githubpages&logoColor=white" alt="Website"></a>
+  <a href="https://github.com/AloysHF/SPMP8000Emu/actions/workflows/ci.yml"><img src="https://github.com/AloysHF/SPMP8000Emu/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://git.libretro.com/libretro/spmp8000emu/-/pipelines"><img src="https://img.shields.io/gitlab/pipeline-status/spmp8000emu?gitlab_url=https%3A%2F%2Fgit.libretro.com%2Flibretro&branch=master&logo=gitlab&label=Pipeline%20Status" alt="Gitlab Pipeline Status" ></a>
-  <a href="https://github.com/jiangxincode/SPMP8000Emu/releases/latest"><img src="https://img.shields.io/github/v/release/jiangxincode/SPMP8000Emu" alt="Release"></a>
-  <a href="https://github.com/jiangxincode/SPMP8000Emu/releases"><img src="https://img.shields.io/github/downloads/jiangxincode/SPMP8000Emu/total" alt="Downloads"></a>
-  <a href="https://sonarcloud.io/dashboard?id=jiangxincode_SPMP8000Emu"><img src="https://sonarcloud.io/api/project_badges/measure?project=jiangxincode_SPMP8000Emu&metric=alert_status" alt="Quality Gate Status"></a>
+  <a href="https://github.com/AloysHF/SPMP8000Emu/releases/latest"><img src="https://img.shields.io/github/v/release/AloysHF/SPMP8000Emu" alt="Release"></a>
+  <a href="https://github.com/AloysHF/SPMP8000Emu/releases"><img src="https://img.shields.io/github/downloads/AloysHF/SPMP8000Emu/total" alt="Downloads"></a>
+  <a href="https://sonarcloud.io/dashboard?id=AloysHF_SPMP8000Emu"><img src="https://sonarcloud.io/api/project_badges/measure?project=AloysHF_SPMP8000Emu&metric=alert_status" alt="Quality Gate Status"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-BSD%203--Clause-blue.svg" alt="License: BSD 3-Clause"></a>
   <a href="https://discord.gg/7XDdSrYD"><img src="https://img.shields.io/badge/Discord-Join%20Us-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
   <a href="https://qm.qq.com/q/LAO7DKAWUC"><img src="https://img.shields.io/badge/QQ%E7%BE%A4-Join%20Us-12B7F5?logo=tencent-qq&logoColor=white" alt="QQ Group"></a>
@@ -46,7 +46,7 @@ ARM-based CPU and HLE system API.
 ### Standalone Mode
 
 Download the latest binary from the
-[Releases](https://github.com/jiangxincode/SPMP8000Emu/releases) page and run:
+[Releases](https://github.com/AloysHF/SPMP8000Emu/releases) page and run:
 
 ```bash
 spmp8000-emu path/to/game.bin

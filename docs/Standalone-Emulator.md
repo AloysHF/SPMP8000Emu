@@ -15,7 +15,7 @@ command-line options.
 ## Installation
 
 Download the latest standalone binary for your platform from the
-[Releases](https://github.com/jiangxincode/SPMP8000Emu/releases) page.
+[Releases](https://github.com/AloysHF/SPMP8000Emu/releases) page.
 
 You can also build it from source:
 

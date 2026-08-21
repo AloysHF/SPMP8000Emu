@@ -28,7 +28,7 @@
 
 ## Getting Started
 
-Check the [open issues](https://github.com/jiangxincode/SPMP8000Emu/issues) for
+Check the [open issues](https://github.com/AloysHF/SPMP8000Emu/issues) for
 tasks labeled `good first issue` or `help wanted`. If you have questions, feel
 free to open a discussion issue.
 
