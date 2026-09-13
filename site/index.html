@@ -49,7 +49,7 @@
       <div class="section-head reveal"><p class="kicker">01 / EMULATOR OVERVIEW</p><h2 data-i18n="overview.title">一个核心，<br>两种前端</h2><p data-i18n="overview.desc">游戏加载、CPU、内存、图形、音频和输入都由共享核心实现。独立版负责桌面窗口与命令行体验，Libretro 核心负责与兼容前端集成。</p></div>
       <div class="chip-board reveal"><div class="chip-lines" aria-hidden="true"></div><div class="chip"><small>RUST CORE</small><strong>SPMP<br>8000</strong><span>GAME RUNTIME</span></div><div class="chip-note n1">ARM interpreter</div><div class="chip-note n2">NativeGE / emuIf HLE</div><div class="chip-note n3">320 × 240 framebuffer</div></div>
       <div class="timeline reveal">
-        <article><time>STANDALONE</time><h3 data-i18n="overview.standalone.title">独立模拟器</h3><p data-i18n="overview.standalone.desc">桌面窗口、键盘输入、按键映射与多种画面滤镜。</p></article>
+        <article><time>STANDALONE</time><h3 data-i18n="overview.standalone.title">独立模拟器</h3><p data-i18n="overview.standalone.desc">桌面窗口、键盘与手柄输入、按键映射与多种画面滤镜。</p></article>
         <article><time>LIBRETRO</time><h3 data-i18n="overview.libretro.title">Libretro 核心</h3><p data-i18n="overview.libretro.desc">核心选项、即时存档、作弊码、内存描述与标准前端回调。</p></article>
         <article><time>PLAY YOUR WAY</time><h3 data-i18n="overview.experience.title">现代使用体验</h3><p data-i18n="overview.experience.desc">即时存档、自定义控制、画面滤镜与游戏作弊功能。</p></article>
       </div>
@@ -71,7 +71,7 @@
         <article class="device-card reveal"><div><span class="status related">GRAPHICS</span><small>320 × 240</small></div><h3 data-i18n="feature.graphics.title">图形输出</h3><p data-i18n="feature.graphics.desc">支持 RGB565、索引色调色板、透明色与 8 种图像变换，输出常见的 320×240 画面。</p></article>
         <article class="device-card reveal"><div><span class="status related">AUDIO</span><small>22050 HZ</small></div><h3 data-i18n="feature.audio.title">音频播放</h3><p data-i18n="feature.audio.desc">提供 22050 Hz 立体声混音，覆盖游戏使用的 WAV 解码与 MIDI 合成路径。</p></article>
         <article class="device-card reveal"><div><span class="status related">RUNTIME</span><small>STATE</small></div><h3 data-i18n="feature.state.title">运行状态</h3><p data-i18n="feature.state.desc">支持重置、版本化即时存档、内容校验、内存与 ARM 寄存器作弊规则。</p></article>
-        <article class="device-card reveal"><div><span class="status related">CONTROL</span><small>INPUT</small></div><h3 data-i18n="feature.input.title">输入控制</h3><p data-i18n="feature.input.desc">独立版提供键盘映射，Libretro 版本通过标准手柄接口接收方向键与功能按键。</p></article>
+        <article class="device-card reveal"><div><span class="status related">CONTROL</span><small>INPUT</small></div><h3 data-i18n="feature.input.title">输入控制</h3><p data-i18n="feature.input.desc">独立版支持键盘映射与物理手柄，Libretro 版本通过标准手柄接口接收方向键与功能按键。</p></article>
           </div>
         </div>
         <div class="feature-carousel-controls">

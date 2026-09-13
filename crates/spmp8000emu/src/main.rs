@@ -2,7 +2,7 @@
 //
 // This binary reuses the shared emulator core from the `spmp8000emu-core` library
 // crate and only adds the platform layer: window management, command-line
-// argument parsing, and keyboard input.
+// argument parsing, and keyboard/gamepad input.
 
 use std::time::{Duration, Instant};
 
@@ -16,6 +16,7 @@ mod standalone;
 
 use audio_output::AudioOutput;
 use standalone::cli::Cli;
+use standalone::gamepad::GamepadMapper;
 use standalone::gamepad_overlay::GamepadOverlay;
 use standalone::input::KeyboardMapper;
 use standalone::scaler::{rgba_to_xrgb, DisplayScaler};
@@ -195,11 +196,12 @@ fn main() -> Result<()> {
     let mut source_buffer = Vec::with_capacity((width * height) as usize);
     let mut display_scaler = DisplayScaler::new(cli.filter);
     let keyboard = KeyboardMapper::new(&cli.remappings);
+    let mut gamepad = GamepadMapper::new(!cli.no_gamepad);
 
     while window.is_open() && !window.is_key_down(Key::Escape) && !emu.should_exit() {
         let start = Instant::now();
 
-        let buttons = keyboard.pressed_buttons(&window);
+        let buttons = keyboard.pressed_buttons(&window) | gamepad.pressed_buttons();
         emu.set_buttons(buttons);
 
         // Execute one frame

@@ -1,8 +1,8 @@
 # Standalone Emulator
 
 This guide covers installing and running the standalone `spmp8000-emu` binary,
-loading games, keyboard controls, display scaling, headless mode, and all
-command-line options.
+loading games, keyboard and gamepad controls, display scaling, headless mode,
+and all command-line options.
 
 ## Supported Platforms
 
@@ -23,6 +23,12 @@ You can also build it from source:
 cargo build -p spmp8000emu --release
 ```
 
+On Linux, install the audio, window, and gamepad development packages first:
+
+```bash
+sudo apt-get install -y libasound2-dev libx11-dev libxkbcommon-dev libudev-dev
+```
+
 The binary is produced at `target/release/spmp8000-emu` (`.exe` on Windows).
 
 ## Synopsis
@@ -41,6 +47,7 @@ spmp8000-emu [OPTIONS] <GAME_PATH>
 | `--filter <FILTER>` | `nearest`, `bilinear`, `bicubic`, `xbrz` | `nearest` | Select the display scaling filter. |
 | `-v, --volume <N>` | `0`–`100` | `100` | Volume level (`0` = mute, `100` = original). |
 | `--swap-ox` | flag | off | Exchange the emulated O and X button signals. |
+| `--no-gamepad` | flag | off | Disable physical gamepad input; keyboard remains available. |
 | `--remap <BUTTON:KEY>` | repeatable mapping | — | Replace a standalone keyboard mapping. |
 | `--show-gamepad` | flag | off | Draw the effective logical button state over the displayed frame. |
 | `--cheat <RULE>` | repeatable rule | — | Freeze a RAM/VRAM value or ARM register once per frame. |
@@ -119,6 +126,25 @@ Remapping converts physical keys into logical SPMP buttons first.
 frontend, Z defaults to O and X defaults to X; in RetroArch, RetroPad A maps to
 O and RetroPad B maps to X. The shared swap option therefore has the same
 logical effect in both frontends.
+
+## Gamepad Controls
+
+The standalone emulator polls the first connected physical gamepad in addition
+to the keyboard. Connected pads are logged at startup and on hot-plug events.
+
+| Control | SPMP Button |
+|---------|-------------|
+| D-pad or left/right stick | D-pad |
+| South (Xbox A / PS Cross) | O |
+| East (Xbox B / PS Circle) | X |
+| Start | START |
+| Select / Back | SELECT |
+
+Face-button labels follow the same RetroPad convention as the default keyboard
+bindings, so an Xbox-style pad feels consistent with RetroArch. Stick axes
+become digital D-pad presses past a 0.5 deadzone. Keyboard and gamepad inputs
+are combined; `--swap-ox` applies to both after they are merged. Pass
+`--no-gamepad` to ignore physical controllers and use the keyboard only.
 
 ## Virtual Gamepad Overlay
 

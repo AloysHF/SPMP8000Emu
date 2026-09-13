@@ -30,7 +30,7 @@ ARM-based CPU and HLE system API.
 - **HLE system API** — emuIf, NativeGE, and eCos interfaces with instruction-driven timing
 - **Graphics rendering** — presentation-synchronized RGB565 and indexed-palette surfaces, sprite color-key transparency, 8 transformation modes, 320×240 display
 - **Audio emulation** — WAV decoding and sample-based MIDI synthesis using the original SPMP8000 tone bank, mixed to 22050 Hz stereo output
-- **Input handling** — keyboard input with configurable mappings
+- **Input handling** — keyboard input with configurable mappings, plus physical gamepad support via gilrs
 - **RetroArch integration** — libretro core for RetroArch frontend
 - **True reset** — rebuilds CPU, memory, HLE, graphics, audio, and input runtime state
 - **Save states** — versioned, checksummed snapshots of the complete emulator runtime
@@ -53,8 +53,8 @@ spmp8000-emu path/to/game.bin
 ```
 
 See the [Standalone Emulator](docs/Standalone-Emulator.md) guide for
-installation, keyboard controls, headless mode, screenshots, and all
-command-line options.
+installation, keyboard and gamepad controls, headless mode, screenshots, and
+all command-line options.
 
 ### RetroArch Mode
 
@@ -120,7 +120,7 @@ crates/
 │           └── native_ge.rs  # NativeGE resource/system API
 ├── spmp8000emu/              # Standalone binary (→ spmp8000-emu)
 │   └── src/
-│       ├── main.rs           # Window loop, CLI, keyboard input
+│       ├── main.rs           # Window loop, CLI, keyboard/gamepad input
 │       └── audio_output.rs   # cpal-based audio output with resampling
 └── spmp8000emu-libretro/     # libretro cdylib (→ spmp8000emu_libretro.{dll,so,dylib})
     └── src/
@@ -138,6 +138,12 @@ crates/
 | Enter | START |
 | Backspace | SELECT |
 | Escape | Exit |
+
+Physical gamepads are also supported in the standalone emulator. The first
+connected pad is polled each frame; D-pad and sticks map to the D-pad, and
+face buttons follow the RetroPad layout (South→O, East→X). Pass
+`--no-gamepad` to disable physical controllers. See
+[Standalone-Emulator.md](docs/Standalone-Emulator.md) for the full mapping.
 
 ## Known SPMP8XXX Devices
 
