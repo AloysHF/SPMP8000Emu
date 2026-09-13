@@ -52,6 +52,10 @@ pub struct Cli {
     #[arg(long = "swap-ox")]
     pub swap_o_x: bool,
 
+    /// Disable physical gamepad input (keyboard remains available)
+    #[arg(long = "no-gamepad")]
+    pub no_gamepad: bool,
+
     /// Remap a logical button in BUTTON:KEY format
     #[arg(long = "remap", value_name = "BUTTON:KEY")]
     pub remappings: Vec<RemapSpec>,
@@ -105,6 +109,7 @@ mod tests {
         let cli = Cli::try_parse_from(["spmp8000-emu", "game.bin"]).unwrap();
         assert_eq!(cli.volume, CoreConfig::default().volume);
         assert!(!cli.swap_o_x);
+        assert!(!cli.no_gamepad);
         assert!(!cli.show_gamepad);
         assert!(cli.remappings.is_empty());
         assert!(cli.cheats.is_empty());
@@ -120,6 +125,7 @@ mod tests {
             "--volume",
             "35",
             "--swap-ox",
+            "--no-gamepad",
             "--remap",
             "o:space",
             "--remap",
@@ -139,6 +145,7 @@ mod tests {
         assert_eq!(cli.volume, 35);
         assert!(cli.swap_o_x);
         assert_eq!(cli.remappings.len(), 2);
+        assert!(cli.no_gamepad);
         assert!(cli.show_gamepad);
         assert_eq!(
             cli.cheats,
@@ -146,6 +153,17 @@ mod tests {
         );
         assert!(cli.debug_logging);
         assert_eq!(cli.unknown_instruction_policy, UnknownInstructionMode::Skip);
+    }
+
+    #[test]
+    fn no_gamepad_flag_is_parsed() {
+        let defaults = Cli::try_parse_from(["spmp8000-emu", "game.bin"]).unwrap();
+        assert!(!defaults.no_gamepad);
+        assert!(
+            Cli::try_parse_from(["spmp8000-emu", "--no-gamepad", "game.bin"])
+                .unwrap()
+                .no_gamepad
+        );
     }
 
     #[test]
