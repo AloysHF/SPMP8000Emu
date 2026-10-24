@@ -2,6 +2,7 @@
 tmp/
 .kiro/
 target/
+out/
 .codegraph/
 .claude/
 .vscode/

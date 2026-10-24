@@ -63,9 +63,11 @@ Pushing the tag triggers `.github/workflows/release.yml`, which:
    `spmp8000emu_libretro.<ext>` and bundling `spmp8000emu_libretro.info`
 3. **Builds Android libretro cores** for `arm64-v8a`, `armeabi-v7a`, `x86`,
    `x86_64`, packaged as `spmp8000-android-libretro.tar.gz`
-4. **Creates a draft GitHub Release** with:
+4. **Builds the EmulatorJS core** for WebAssembly, packaged as
+   `spmp8000-emu-emulatorjs.zip`
+5. **Creates a draft GitHub Release** with:
    - Auto-generated release notes (PRs and commits since the previous tag)
-   - A download table for standalone, libretro, and Android artifacts
+   - A download table for standalone, libretro, Android, and EmulatorJS artifacts
    - All build artifacts attached
 
 ### 5. Review and publish the release
@@ -80,6 +82,7 @@ Pushing the tag triggers `.github/workflows/release.yml`, which:
    - `spmp8000-emu-windows-x86_64.zip`
    - `*-libretro.*` (one per platform)
    - `spmp8000-android-libretro.tar.gz`
+   - `spmp8000-emu-emulatorjs.zip`
 5. Click **Publish release**
 
 ### 6. Sync `.info` file to upstream libretro-super
