@@ -16,7 +16,7 @@
   <div class="grain" aria-hidden="true"></div>
   <header class="topbar">
     <a class="brand" href="#top" aria-label="SPMP8000Emu"><img class="brand-logo" src="https://raw.githubusercontent.com/AloysHF/SPMP8000Emu/master/res/logo-banner.png" alt="SPMP8000Emu"></a>
-    <nav aria-label="主导航"><a href="#overview" data-i18n="nav.overview">概览</a><a href="#features" data-i18n="nav.features">功能</a><a href="#compat" data-i18n="nav.compat">兼容性</a><a href="#devices" data-i18n="nav.devices">设备</a></nav>
+    <nav aria-label="主导航"><a href="#overview" data-i18n="nav.overview">概览</a><a href="#features" data-i18n="nav.features">功能</a><a href="play.html" data-i18n="nav.play">在线试玩</a><a href="#compat" data-i18n="nav.compat">兼容性</a><a href="#devices" data-i18n="nav.devices">设备</a></nav>
     <div class="nav-actions"><button class="lang-toggle" type="button" aria-label="Switch to English">EN</button><a class="nav-cta" href="https://github.com/AloysHF/SPMP8000Emu">GitHub ↗</a></div>
   </header>
 
@@ -25,9 +25,9 @@
       <div class="hero-copy reveal">
         <p class="eyebrow"><span class="pulse"></span> SPMP8000 NATIVE GAME EMULATOR</p>
         <h1 data-i18n="hero.title">SPMP8000<br><span>游戏模拟器</span></h1>
-        <p class="lead" data-i18n="hero.lead">SPMP8000Emu 使用 Rust 实现，用于运行 SPMP8000 系列设备上的<strong>原生 BIN 游戏</strong>。同一套模拟核心可通过独立窗口运行，也可作为 Libretro 核心接入前端。</p>
-        <div class="actions"><a class="button primary" href="#build"><span data-i18n="hero.run">开始运行</span> <span>→</span></a><a class="button secondary" href="https://github.com/AloysHF/SPMP8000Emu" data-i18n="hero.source">查看源码 ↗</a></div>
-        <div class="hero-stats" aria-label="项目摘要"><div><strong>20+</strong><span data-i18n="stats.games">支持游戏</span></div><div><strong>10+</strong><span data-i18n="stats.devices">模拟机器</span></div><div><strong>2</strong><span data-i18n="stats.frontends">种运行前端</span></div><div><strong>6</strong><span data-i18n="stats.platforms">兼容平台</span></div></div>
+        <p class="lead" data-i18n="hero.lead">SPMP8000Emu 使用 Rust 实现，用于运行 SPMP8000 系列设备上的<strong>原生 BIN 游戏</strong>。同一套模拟核心可通过独立窗口运行，也可作为 Libretro 核心接入前端，或在浏览器中直接开玩。</p>
+        <div class="actions"><a class="button primary" href="play.html"><span data-i18n="hero.play">在线试玩</span> <span>→</span></a><a class="button secondary" href="#build" data-i18n="hero.run">开始运行</a><a class="button secondary" href="https://github.com/AloysHF/SPMP8000Emu" data-i18n="hero.source">查看源码 ↗</a></div>
+        <div class="hero-stats" aria-label="项目摘要"><div><strong>20+</strong><span data-i18n="stats.games">支持游戏</span></div><div><strong>10+</strong><span data-i18n="stats.devices">模拟机器</span></div><div><strong>3</strong><span data-i18n="stats.frontends">种运行前端</span></div><div><strong>6</strong><span data-i18n="stats.platforms">兼容平台</span></div></div>
       </div>
       <div class="console-wrap reveal" aria-label="Emulator screenshots">
         <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
@@ -46,7 +46,7 @@
     </section>
 
     <section class="section story" id="overview">
-      <div class="section-head reveal"><p class="kicker">01 / EMULATOR OVERVIEW</p><h2 data-i18n="overview.title">一个核心，<br>两种前端</h2><p data-i18n="overview.desc">游戏加载、CPU、内存、图形、音频和输入都由共享核心实现。独立版负责桌面窗口与命令行体验，Libretro 核心负责与兼容前端集成。</p></div>
+      <div class="section-head reveal"><p class="kicker">01 / EMULATOR OVERVIEW</p><h2 data-i18n="overview.title">一个核心，<br>三种前端</h2><p data-i18n="overview.desc">游戏加载、CPU、内存、图形、音频和输入都由共享核心实现。独立版负责桌面窗口与命令行体验，Libretro 核心负责与兼容前端集成，EmulatorJS 核心让游戏直接在浏览器中运行。</p></div>
       <div class="chip-board reveal"><div class="chip-lines" aria-hidden="true"></div><div class="chip"><small>RUST CORE</small><strong>SPMP<br>8000</strong><span>GAME RUNTIME</span></div><div class="chip-note n1">ARM interpreter</div><div class="chip-note n2">NativeGE / emuIf HLE</div><div class="chip-note n3">320 × 240 framebuffer</div></div>
       <div class="timeline reveal">
         <article><time>STANDALONE</time><h3 data-i18n="overview.standalone.title">独立模拟器</h3><p data-i18n="overview.standalone.desc">桌面窗口、键盘与手柄输入、按键映射与多种画面滤镜。</p></article>
@@ -56,16 +56,17 @@
     </section>
 
     <section class="section devices" id="features">
-      <div class="section-head compact reveal"><p class="kicker">02 / IMPLEMENTED FEATURES</p><h2 data-i18n="features.title">已实现功能</h2><p data-i18n="features.desc">模拟器当前提供以下核心能力，独立版与 Libretro 核心共享同一套实现。</p></div>
+      <div class="section-head compact reveal"><p class="kicker">02 / IMPLEMENTED FEATURES</p><h2 data-i18n="features.title">已实现功能</h2><p data-i18n="features.desc">模拟器当前提供以下核心能力，独立版、Libretro 核心与 EmulatorJS 核心共享同一套实现。</p></div>
       <div class="feature-carousel">
         <div class="feature-viewport" tabindex="0" aria-label="Implemented features carousel">
           <div class="device-grid feature-cards">
         <article class="device-card platform-feature reveal">
           <div><span class="status confirmed">PLATFORM</span><small>6 TARGETS</small></div>
           <h3 data-i18n="platforms.title">多平台支持</h3>
-          <p data-i18n="platforms.desc">Windows、macOS 与 Linux 同时提供独立版和 Libretro 核心；Android、iOS 与 webOS 通过 Libretro 前端运行。</p>
+          <p data-i18n="platforms.desc">Windows、macOS 与 Linux 同时提供独立版和 Libretro 核心；Android、iOS 与 webOS 通过 Libretro 前端运行，现代浏览器则可以直接运行 EmulatorJS 核心。</p>
           <div class="platform-tags" aria-label="Windows, macOS, Linux, Android, iOS, webOS"><span>WIN</span><span>MAC</span><span>LINUX</span><span>ANDROID</span><span>iOS</span><span>webOS</span></div>
         </article>
+        <article class="device-card reveal"><div><span class="status related">BROWSER</span><small>WEBASSEMBLY</small></div><h3 data-i18n="feature.browser.title">浏览器运行</h3><p data-i18n="feature.browser.desc">EmulatorJS 核心通过 WebAssembly 在浏览器中运行，选择本机的 BIN 游戏即可直接游玩，无需安装。</p><a href="play.html" data-i18n="feature.browser.link">在线试玩 →</a></article>
         <article class="device-card reveal"><div><span class="status confirmed">FORMAT</span><small>SPMP8000 BIN</small></div><h3 data-i18n="feature.loader.title">游戏加载</h3><p data-i18n="feature.loader.desc">解析 SPMP8000 原生 BIN 容器与游戏头，处理 DES 数据，并支持 LZ77/LZSS 与 RLE 解压路径。</p></article>
         <article class="device-card reveal"><div><span class="status related">CPU</span><small>ARM MODE</small></div><h3 data-i18n="feature.cpu.title">ARM 执行</h3><p data-i18n="feature.cpu.desc">使用 ARM 模式指令解释器运行游戏代码，维护寄存器、内存访问与运行时状态。</p></article>
         <article class="device-card reveal"><div><span class="status related">GRAPHICS</span><small>320 × 240</small></div><h3 data-i18n="feature.graphics.title">图形输出</h3><p data-i18n="feature.graphics.desc">支持 RGB565、索引色调色板、透明色与 8 种图像变换，输出常见的 320×240 画面。</p></article>
@@ -76,7 +77,7 @@
         </div>
         <div class="feature-carousel-controls">
           <div class="feature-carousel-progress" aria-hidden="true"><i></i></div>
-          <span class="feature-carousel-counter" aria-live="polite">01 / 07</span>
+          <span class="feature-carousel-counter" aria-live="polite">01 / 08</span>
           <button class="feature-carousel-button" type="button" data-feature-prev aria-label="Previous feature">←</button>
           <button class="feature-carousel-button" type="button" data-feature-next aria-label="Next feature">→</button>
         </div>
@@ -97,7 +98,7 @@ cargo build --release
 
 <em># Run an SPMP8000 BIN game</em>
 cargo run -p spmp8000emu --release -- path/to/game.bin</code></pre><button class="copy" type="button" data-copy="git clone https://github.com/AloysHF/SPMP8000Emu.git" data-i18n="build.copy">复制 clone 命令</button></div>
-      <div class="build-links reveal"><a href="https://github.com/AloysHF/SPMP8000Emu" data-i18n="build.project">项目说明 →</a><a href="https://github.com/AloysHF/SPMP8000Emu/blob/master/docs/Standalone-Emulator.md" data-i18n="build.standalone">独立版文档 →</a><a href="https://github.com/AloysHF/SPMP8000Emu/blob/master/docs/RetroArch-Core.md" data-i18n="build.libretro">Libretro 文档 →</a></div>
+      <div class="build-links reveal"><a href="https://github.com/AloysHF/SPMP8000Emu" data-i18n="build.project">项目说明 →</a><a href="https://github.com/AloysHF/SPMP8000Emu/blob/master/docs/Standalone-Emulator.md" data-i18n="build.standalone">独立版文档 →</a><a href="https://github.com/AloysHF/SPMP8000Emu/blob/master/docs/RetroArch-Core.md" data-i18n="build.libretro">Libretro 文档 →</a><a href="https://github.com/AloysHF/SPMP8000Emu/blob/master/docs/EmulatorJS-Core.md" data-i18n="build.browser">浏览器核心文档 →</a></div>
     </section>
 
     <section class="section device-family" id="devices">

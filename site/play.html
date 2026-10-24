@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="在浏览器中选择本机的 SPMP8000 游戏 BIN 文件即可直接游玩，无需安装。由 EmulatorJS 与 SPMP8000Emu WebAssembly 核心驱动。">
+  <meta name="theme-color" content="#0b0d0c">
+  <title>在线试玩 SPMP8000 游戏 — SPMP8000Emu</title>
+  <link rel="icon" href="https://raw.githubusercontent.com/AloysHF/SPMP8000Emu/master/res/logo-banner.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="play-page">
+  <header class="topbar">
+    <a class="brand" href="index.html" aria-label="SPMP8000Emu"><img class="brand-logo" src="https://raw.githubusercontent.com/AloysHF/SPMP8000Emu/master/res/logo-banner.png" alt="SPMP8000Emu"></a>
+    <nav aria-label="主导航"><a href="index.html" data-i18n="nav-back">返回首页</a></nav>
+    <div class="nav-actions"><button class="lang-toggle" type="button" aria-label="Switch to English">EN</button><a class="nav-cta" href="https://github.com/AloysHF/SPMP8000Emu">GitHub ↗</a></div>
+  </header>
+
+  <main class="play-main">
+    <p class="eyebrow"><span class="pulse"></span> <span data-i18n="eyebrow">BROWSER PLAY · EMULATORJS</span></p>
+    <h1 class="play-title" data-i18n="title">在线试玩 <span>SPMP8000</span> 游戏</h1>
+    <p class="play-subtitle" data-i18n="subtitle">选择本机上的游戏 <code>.bin</code> 文件，由 <strong>EmulatorJS</strong> 与 SPMP8000Emu WebAssembly 核心在浏览器中直接运行，无需安装。</p>
+
+    <div class="play-stage">
+      <div id="game"></div>
+
+      <div id="play-status" class="play-overlay" hidden>
+        <h2 data-i18n="status-title">正在加载核心…</h2>
+        <p data-i18n="status-desc">首次启动需要下载 WebAssembly 核心，请稍候。</p>
+      </div>
+
+      <div id="play-picker" class="play-overlay">
+        <h2 data-i18n="picker-title">选择游戏文件</h2>
+        <p data-i18n="picker-desc">请选择自包含的 <code>.bin</code> 游戏文件。文件只在浏览器本地处理，不会被上传。</p>
+        <label class="button primary play-pick">
+          <span data-i18n="pick-label">选择文件</span>
+          <input id="play-file" type="file" accept=".bin,application/octet-stream" hidden>
+        </label>
+        <p id="play-picker-error" class="play-picker-error" hidden></p>
+        <p class="play-picker-hint" data-i18n="picker-hint">也可以把文件拖进窗口。可玩的游戏见 <a href="https://github.com/AloysHF/SPMP8000Emu/blob/master/docs/Game-Compatibility.md">游戏兼容列表</a>。</p>
+      </div>
+
+      <div id="play-error" class="play-overlay" hidden>
+        <h2 data-i18n="error-title">无法启动在线模拟器</h2>
+        <p class="play-error-text" data-i18n="error-text">EmulatorJS 运行时未部署（缺少 <code>data/loader.js</code>）。请在本地通过 Pages 部署流程生成 <code>site/data</code>，或直接使用独立版模拟器。</p>
+      </div>
+    </div>
+
+    <div class="play-controls">
+      <span data-i18n="ctrl-move"><kbd>方向键</kbd> 移动</span>
+      <span data-i18n="ctrl-action"><kbd>Z</kbd> / <kbd>X</kbd> 攻击与跳跃</span>
+      <span data-i18n="ctrl-start"><kbd>Enter</kbd> START</span>
+      <span data-i18n="ctrl-select"><kbd>Shift</kbd> SELECT</span>
+      <span data-i18n="ctrl-gamepad">支持手柄与手机触屏</span>
+      <button id="play-reset" class="play-reset" type="button" data-i18n="reset" hidden>换一个游戏</button>
+    </div>
+
+    <p class="play-note" data-i18n="note">在线试玩使用 <a href="https://emulatorjs.org">EmulatorJS</a>，即时存档只保存在浏览器本地。游戏数据不随本站分发，请使用自己合法持有的游戏文件。想离线游玩？从 <a href="https://github.com/AloysHF/SPMP8000Emu/releases">Releases</a> 下载独立模拟器或 RetroArch 核心。</p>
+  </main>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var translations = {
+        zh: {
+          'meta-title': '在线试玩 SPMP8000 游戏 — SPMP8000Emu',
+          'meta-desc': '在浏览器中选择本机的 SPMP8000 游戏 BIN 文件即可直接游玩，无需安装。由 EmulatorJS 与 SPMP8000Emu WebAssembly 核心驱动。',
+          'nav-back': '返回首页',
+          'eyebrow': 'BROWSER PLAY · EMULATORJS',
+          'title': '在线试玩 <span>SPMP8000</span> 游戏',
+          'subtitle': '选择本机上的游戏 <code>.bin</code> 文件，由 <strong>EmulatorJS</strong> 与 SPMP8000Emu WebAssembly 核心在浏览器中直接运行，无需安装。',
+          'status-title': '正在加载核心…',
+          'status-desc': '首次启动需要下载 WebAssembly 核心，请稍候。',
+          'picker-title': '选择游戏文件',
+          'picker-desc': '请选择自包含的 <code>.bin</code> 游戏文件。文件只在浏览器本地处理，不会被上传。',
+          'pick-label': '选择文件',
+          'pick-invalid': '仅支持自包含的游戏文件。',
+          'picker-hint': '也可以把文件拖进窗口。可玩的游戏见 <a href="https://github.com/AloysHF/SPMP8000Emu/blob/master/docs/Game-Compatibility.md">游戏兼容列表</a>。',
+          'error-title': '无法启动在线模拟器',
+          'error-text': 'EmulatorJS 运行时未部署（缺少 <code>data/loader.js</code>）。请在本地通过 Pages 部署流程生成 <code>site/data</code>，或直接使用独立版模拟器。',
+          'ctrl-move': '<kbd>方向键</kbd> 移动',
+          'ctrl-action': '<kbd>Z</kbd> / <kbd>X</kbd> 攻击与跳跃',
+          'ctrl-start': '<kbd>Enter</kbd> START',
+          'ctrl-select': '<kbd>Shift</kbd> SELECT',
+          'ctrl-gamepad': '支持手柄与手机触屏',
+          'reset': '换一个游戏',
+          'note': '在线试玩使用 <a href="https://emulatorjs.org">EmulatorJS</a>，即时存档只保存在浏览器本地。游戏数据不随本站分发，请使用自己合法持有的游戏文件。想离线游玩？从 <a href="https://github.com/AloysHF/SPMP8000Emu/releases">Releases</a> 下载独立模拟器或 RetroArch 核心。'
+        },
+        en: {
+          'meta-title': 'Play SPMP8000 Games Online — SPMP8000Emu',
+          'meta-desc': 'Play an SPMP8000 game BIN from your device right in the browser, no install required. Powered by EmulatorJS and the SPMP8000Emu WebAssembly core.',
+          'nav-back': 'Back to Home',
+          'eyebrow': 'BROWSER PLAY · EMULATORJS',
+          'title': 'Play <span>SPMP8000</span> Games Online',
+          'subtitle': 'Pick a game <code>.bin</code> from your device — <strong>EmulatorJS</strong> and the SPMP8000Emu WebAssembly core run it right in the browser.',
+          'status-title': 'Loading core…',
+          'status-desc': 'The first launch downloads the WebAssembly core.',
+          'picker-title': 'Choose a game file',
+          'picker-desc': 'Pick a self-contained <code>.bin</code> game. The file is processed locally in your browser and never uploaded.',
+          'pick-label': 'Choose File',
+          'pick-invalid': 'Only self-contained game files are supported.',
+          'picker-hint': 'You can also drop a file onto the window. See the <a href="https://github.com/AloysHF/SPMP8000Emu/blob/master/docs/Game-Compatibility.md">game compatibility list</a> for playable titles.',
+          'error-title': 'Unable to start the online emulator',
+          'error-text': 'The EmulatorJS runtime is not deployed (missing <code>data/loader.js</code>). Generate <code>site/data</code> through the Pages workflow, or use the standalone emulator.',
+          'ctrl-move': '<kbd>Arrows</kbd> Move',
+          'ctrl-action': '<kbd>Z</kbd> / <kbd>X</kbd> Attack &amp; jump',
+          'ctrl-start': '<kbd>Enter</kbd> START',
+          'ctrl-select': '<kbd>Shift</kbd> SELECT',
+          'ctrl-gamepad': 'Gamepad and touch controls supported',
+          'reset': 'Play another game',
+          'note': 'Online play uses <a href="https://emulatorjs.org">EmulatorJS</a>; save states are kept in your browser only. Game data is not distributed with this site, so use games you legally own. Prefer playing offline? Download the standalone emulator or the RetroArch core from <a href="https://github.com/AloysHF/SPMP8000Emu/releases">Releases</a>.'
+        }
+      };
+
+      var storageKey = 'spmp8000emu-language';
+      var currentLang = 'zh';
+      try {
+        currentLang = localStorage.getItem(storageKey) || (navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en');
+      } catch (error) {
+        currentLang = navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+      }
+
+      var languageButton = document.querySelector('.lang-toggle');
+      var description = document.querySelector('meta[name="description"]');
+
+      function applyLang(lang) {
+        currentLang = lang;
+        document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+        var t = translations[lang];
+
+        document.querySelectorAll('[data-i18n]').forEach(function (el) {
+          var key = el.getAttribute('data-i18n');
+          if (t[key] !== undefined) el.innerHTML = t[key];
+        });
+
+        document.title = t['meta-title'];
+        if (description) description.setAttribute('content', t['meta-desc']);
+        languageButton.textContent = lang === 'zh' ? 'EN' : '中文';
+        languageButton.setAttribute('aria-label', lang === 'zh' ? 'Switch to English' : '切换到中文');
+
+        try {
+          localStorage.setItem(storageKey, lang);
+        } catch (error) {
+          // Language persistence is optional in restricted browsing contexts.
+        }
+      }
+
+      var RUNTIME_PATH = 'data/';
+      var GAME_EXTENSIONS = /\.bin$/i;
+      var stage = document.querySelector('.play-stage');
+      var status = document.getElementById('play-status');
+      var picker = document.getElementById('play-picker');
+      var pickerError = document.getElementById('play-picker-error');
+      var error = document.getElementById('play-error');
+      var fileInput = document.getElementById('play-file');
+      var resetButton = document.getElementById('play-reset');
+      var booted = false;
+
+      function show(element) { element.hidden = false; }
+      function hide(element) { element.hidden = true; }
+
+      function boot(file) {
+        if (booted) return;
+        booted = true;
+        hide(picker);
+        hide(error);
+        show(status);
+
+        window.EJS_player = '#game';
+        window.EJS_core = 'spmp8000emu';
+        // A blob URL has no file name, so EJS_gameName must keep the extension:
+        // EmulatorJS writes the content under this name in the wasm filesystem
+        // and the core opens it by path (need_fullpath).
+        window.EJS_gameUrl = URL.createObjectURL(file);
+        window.EJS_gameName = file.name;
+        window.EJS_pathtodata = RUNTIME_PATH;
+        window.EJS_startOnLoaded = false;
+        window.EJS_backgroundColor = '#0a0a0a';
+        // Only zh-CN is deployed next to the runtime; other languages use the
+        // built-in English UI.
+        if (currentLang === 'zh') window.EJS_language = 'zh-CN';
+
+        var runtime = document.createElement('script');
+        runtime.src = RUNTIME_PATH + 'loader.js';
+        runtime.onload = function () {
+          hide(status);
+          show(resetButton);
+        };
+        runtime.onerror = function () {
+          booted = false;
+          hide(status);
+          show(error);
+        };
+        document.body.appendChild(runtime);
+      }
+
+      function pick(file) {
+        if (!file) return;
+        if (!GAME_EXTENSIONS.test(file.name)) {
+          pickerError.textContent = translations[currentLang]['pick-invalid'];
+          show(pickerError);
+          return;
+        }
+        hide(pickerError);
+        boot(file);
+      }
+
+      fileInput.addEventListener('change', function () {
+        pick(fileInput.files && fileInput.files[0]);
+      });
+
+      var dragDepth = 0;
+
+      document.addEventListener('dragenter', function (event) {
+        event.preventDefault();
+        if (booted) return;
+        dragDepth += 1;
+        stage.classList.add('is-drop');
+      });
+
+      document.addEventListener('dragover', function (event) {
+        event.preventDefault();
+      });
+
+      document.addEventListener('dragleave', function (event) {
+        event.preventDefault();
+        if (booted) return;
+        dragDepth = Math.max(0, dragDepth - 1);
+        if (dragDepth === 0) stage.classList.remove('is-drop');
+      });
+
+      document.addEventListener('drop', function (event) {
+        event.preventDefault();
+        dragDepth = 0;
+        stage.classList.remove('is-drop');
+        if (booted) return;
+        pick(event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]);
+      });
+
+      resetButton.addEventListener('click', function () {
+        window.location.reload();
+      });
+
+      languageButton.addEventListener('click', function () {
+        applyLang(currentLang === 'zh' ? 'en' : 'zh');
+      });
+
+      applyLang(currentLang);
+    })();
+  </script>
+</body>
+</html>

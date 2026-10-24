@@ -361,9 +361,59 @@ jobs:
           path: spmp8000-emu-webos-libretro.tar.gz
           retention-days: 7
 
+  build-emulatorjs:
+    name: Build EmulatorJS core
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # -Zbuild-std needs nightly. Rebuilding std with panic=abort keeps wasm
+      # exception handling out of the module: Binaryen's Asyncify pass, which
+      # the fork forces on for OpenAL audio, aborts on EH instructions.
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-09-10
+          targets: wasm32-unknown-emscripten
+          components: rust-src
+
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.74
+
+      - name: Cache Rust artifacts
+        uses: swatinem/rust-cache@v2
+        with:
+          key: nightly-emulatorjs
+
+      - name: Install packaging tools
+        run: sudo apt-get update && sudo apt-get install -y p7zip-full zip
+
+      - name: Build wasm staticlib
+        run: >
+          cargo build -p spmp8000emu-libretro
+          --target wasm32-unknown-emscripten --profile wasm-release
+          -Zbuild-std=std,panic_abort
+
+      - name: Build EmulatorJS core bundles
+        run: |
+          # Keep the RetroArch build tree out of target/: rust-cache archives
+          # target/ and restores it without .git, which breaks the checkout.
+          rm -rf target/emulatorjs-build
+          scripts/build-emulatorjs-core.sh --work-dir "$RUNNER_TEMP/emulatorjs-build"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: spmp8000-emu-emulatorjs
+          path: out/spmp8000-emu-emulatorjs.zip
+          retention-days: 7
+
   release:
     name: Publish Nightly Release
-    needs: [build, build-android, build-ios, build-webos]
+    needs: [build, build-android, build-ios, build-webos, build-emulatorjs]
     runs-on: ubuntu-latest
     steps:
       - name: Compute version metadata
@@ -410,6 +460,9 @@ jobs:
           - Platforms: Windows x86_64/i686, macOS x86_64/aarch64, Linux x86_64/aarch64/i686, Android (arm64-v8a/armeabi-v7a/x86/x86_64), iOS (arm64/x86_64/simulator), webOS (armv7)
             (the 32-bit i686 builds are libretro cores only, no standalone binary)
           - Includes the standalone emulator and the libretro core (\`*-libretro.*\`) for RetroArch
+          - EmulatorJS core (\`spmp8000-emu-emulatorjs.zip\`): \`cores/spmp8000emu-wasm.data\`,
+            \`cores/spmp8000emu-legacy-wasm.data\` and \`cores/reports/spmp8000emu.json\`, ready
+            to drop into EmulatorJS's \`data/\` directory
 
           ⚠️ Unsigned build: Windows SmartScreen / macOS Gatekeeper may block on first launch.
           EOF

@@ -9,7 +9,9 @@ license.workspace = true
 # Keep this aligned with CORENAME in .gitlab-ci.yml. The buildbot appends
 # `_libretro` to this core name when packaging the cdylib.
 name = "spmp8000emu"
-crate-type = ["cdylib"]
+# `staticlib` is what the EmulatorJS build links into its RetroArch fork for
+# the wasm target; desktop builds keep using the cdylib.
+crate-type = ["cdylib", "staticlib"]
 path = "src/lib.rs"
 
 [dependencies]

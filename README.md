@@ -16,8 +16,8 @@
   <a href="https://qm.qq.com/q/LAO7DKAWUC"><img src="https://img.shields.io/badge/QQ%E7%BE%A4-Join%20Us-12B7F5?logo=tencent-qq&logoColor=white" alt="QQ Group"></a>
 </p>
 
-A SPMP8000 game emulator written in Rust, supporting both standalone mode and
-RetroArch integration.
+A SPMP8000 game emulator written in Rust, supporting standalone mode,
+RetroArch integration, and browser play through EmulatorJS.
 
 SPMP8000 is a Sunplus multimedia SoC commonly found in portable gaming devices
 (circa 2005–2011). Games use `.bin` files in the NGame1.0 format with an
@@ -32,12 +32,13 @@ ARM-based CPU and HLE system API.
 - **Audio emulation** — WAV decoding and sample-based MIDI synthesis using the original SPMP8000 tone bank, mixed to 22050 Hz stereo output
 - **Input handling** — keyboard input with configurable mappings, plus physical gamepad support via gilrs
 - **RetroArch integration** — libretro core for RetroArch frontend
+- **Browser play** — EmulatorJS (WebAssembly) core for running games in a web page
 - **True reset** — rebuilds CPU, memory, HLE, graphics, audio, and input runtime state
 - **Save states** — versioned, checksummed snapshots of the complete emulator runtime
 - **Live core options** — adjust volume, O/X layout, and diagnostics without resetting the game
 - **Memory and cheats** — inspect SPMP RAM/VRAM and freeze validated memory addresses or ARM registers
 - **Standalone mode** — minifb window with CLI
-- **Cross-platform** — Windows, macOS, Linux, Android, iOS, webOS
+- **Cross-platform** — Windows, macOS, Linux, Android, iOS, webOS, and modern browsers
 - **Headless mode** — run without a window for testing and batch processing
 - **Screenshot capture** — automated PNG screenshot generation
 
@@ -63,6 +64,16 @@ Install the core and load a game through RetroArch's **Load Content** menu.
 See the [RetroArch Core](docs/RetroArch-Core.md) guide for installation,
 supported platforms, RetroPad mapping, and features.
 
+### Browser Mode (EmulatorJS)
+
+The libretro core is also built for WebAssembly and packaged for
+[EmulatorJS](https://emulatorjs.org). Visitors can pick a local `.bin` game on
+the [online play page](https://aloyshf.github.io/SPMP8000Emu/play.html) and run
+it without installing anything; the file never leaves the browser.
+
+See the [EmulatorJS Core](docs/EmulatorJS-Core.md) guide for the core bundle
+layout, runtime hosting, and build instructions.
+
 ## Building
 
 Requires [Rust](https://www.rust-lang.org/tools/install) (stable).
@@ -87,6 +98,7 @@ directory.
 
 For Android cross-compilation, see [Android Libretro Core](docs/Android-Libretro-Core.md).
 For iOS, see [iOS Libretro Core](docs/iOS-Libretro-Core.md).
+For the WebAssembly build, see [EmulatorJS Core](docs/EmulatorJS-Core.md).
 
 ## Architecture
 
