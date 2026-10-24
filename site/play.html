@@ -31,7 +31,7 @@
 
       <div id="play-picker" class="play-overlay">
         <h2 data-i18n="picker-title">选择游戏文件</h2>
-        <p data-i18n="picker-desc">请选择 NGame1.0 格式的 <code>.bin</code> 游戏文件。文件只在浏览器本地处理，不会被上传。</p>
+        <p data-i18n="picker-desc">请选择自包含的 <code>.bin</code> 游戏文件。文件只在浏览器本地处理，不会被上传。</p>
         <label class="button primary play-pick">
           <span data-i18n="pick-label">选择文件</span>
           <input id="play-file" type="file" accept=".bin,application/octet-stream" hidden>
@@ -73,9 +73,9 @@
           'status-title': '正在加载核心…',
           'status-desc': '首次启动需要下载 WebAssembly 核心，请稍候。',
           'picker-title': '选择游戏文件',
-          'picker-desc': '请选择 NGame1.0 格式的 <code>.bin</code> 游戏文件。文件只在浏览器本地处理，不会被上传。',
+          'picker-desc': '请选择自包含的 <code>.bin</code> 游戏文件。文件只在浏览器本地处理，不会被上传。',
           'pick-label': '选择文件',
-          'pick-invalid': '仅支持 NGame1.0 格式的 .bin 游戏文件。',
+          'pick-invalid': '仅支持自包含的游戏文件。',
           'picker-hint': '也可以把文件拖进窗口。可玩的游戏见 <a href="https://github.com/AloysHF/SPMP8000Emu/blob/master/docs/Game-Compatibility.md">游戏兼容列表</a>。',
           'error-title': '无法启动在线模拟器',
           'error-text': 'EmulatorJS 运行时未部署（缺少 <code>data/loader.js</code>）。请在本地通过 Pages 部署流程生成 <code>site/data</code>，或直接使用独立版模拟器。',
@@ -97,9 +97,9 @@
           'status-title': 'Loading core…',
           'status-desc': 'The first launch downloads the WebAssembly core.',
           'picker-title': 'Choose a game file',
-          'picker-desc': 'Pick an NGame1.0 <code>.bin</code> game. The file is processed locally in your browser and never uploaded.',
+          'picker-desc': 'Pick a self-contained <code>.bin</code> game. The file is processed locally in your browser and never uploaded.',
           'pick-label': 'Choose File',
-          'pick-invalid': 'Only NGame1.0 .bin game files are supported.',
+          'pick-invalid': 'Only self-contained game files are supported.',
           'picker-hint': 'You can also drop a file onto the window. See the <a href="https://github.com/AloysHF/SPMP8000Emu/blob/master/docs/Game-Compatibility.md">game compatibility list</a> for playable titles.',
           'error-title': 'Unable to start the online emulator',
           'error-text': 'The EmulatorJS runtime is not deployed (missing <code>data/loader.js</code>). Generate <code>site/data</code> through the Pages workflow, or use the standalone emulator.',
