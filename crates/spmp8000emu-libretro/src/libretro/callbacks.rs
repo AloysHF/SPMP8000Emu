@@ -3,7 +3,7 @@
 // libretro callback management.
 
 use super::types::*;
-use std::ffi::{c_void, CStr};
+use std::ffi::c_void;
 
 /// Global callback storage
 pub struct Callbacks {
@@ -76,7 +76,13 @@ pub fn set_input_state(cb: retro_input_state_t) {
     }
 }
 
-/// Get log interface from frontend
+/// Get log interface from frontend.
+///
+/// Skipped on Emscripten: libretro's log callback is C-variadic while our
+/// `retro_log_printf_t` binding is not, and wasm has no C varargs. Calling the
+/// frontend's function through the mismatched type traps at runtime, so wasm
+/// builds log to stderr (the browser console) instead.
+#[cfg(not(target_os = "emscripten"))]
 pub fn init_log() {
     unsafe {
         CALLBACKS.log = Some(fallback_log);
@@ -93,20 +99,29 @@ pub fn init_log() {
     }
 }
 
-/// Fallback log function that writes to stderr
+#[cfg(target_os = "emscripten")]
+pub fn init_log() {}
+
+/// Part of the `retro_log_callback` initializer on desktop builds only.
+#[cfg(not(target_os = "emscripten"))]
 unsafe extern "C" fn fallback_log(level: retro_log_level, fmt: *const std::ffi::c_char) {
-    let level_str = match level {
+    let message = if fmt.is_null() {
+        String::new()
+    } else {
+        std::ffi::CStr::from_ptr(fmt)
+            .to_string_lossy()
+            .replace("%%", "%")
+    };
+    eprintln!("[SPMP8000Emu] {}: {}", level_name(level), message);
+}
+
+fn level_name(level: retro_log_level) -> &'static str {
+    match level {
         retro_log_level::RETRO_LOG_DEBUG => "DEBUG",
         retro_log_level::RETRO_LOG_INFO => "INFO",
         retro_log_level::RETRO_LOG_WARN => "WARN",
         retro_log_level::RETRO_LOG_ERROR => "ERROR",
-    };
-    let message = if fmt.is_null() {
-        String::new()
-    } else {
-        CStr::from_ptr(fmt).to_string_lossy().replace("%%", "%")
-    };
-    eprintln!("[SPMP8000Emu] {}: {}", level_str, message);
+    }
 }
 
 /// Call environment callback
@@ -168,11 +183,21 @@ pub fn input_state(port: u32, device: u32, index: u32, id: u32) -> i16 {
 
 /// Log a message using the frontend's log interface
 pub fn log_message(level: retro_log_level, msg: &str) {
-    unsafe {
-        if let Some(log_fn) = CALLBACKS.log {
+    match unsafe { CALLBACKS.log } {
+        Some(log_fn) => {
+            // The frontend's log function is printf-style and treats its string
+            // argument as a format string. Our message is already fully
+            // formatted, so any literal '%' must be escaped to '%%' to avoid
+            // format-string interpretation (which would read non-existent
+            // variadic arguments and may crash the frontend).
             let escaped = msg.replace('%', "%%");
             let c_msg = std::ffi::CString::new(escaped).unwrap_or_default();
-            log_fn(level, c_msg.as_ptr());
+            unsafe { log_fn(level, c_msg.as_ptr()) };
         }
+        // Wasm builds never receive a frontend log callback; see `init_log`.
+        #[cfg(target_os = "emscripten")]
+        None => eprintln!("[SPMP8000Emu] {}: {}", level_name(level), msg),
+        #[cfg(not(target_os = "emscripten"))]
+        None => {}
     }
 }
