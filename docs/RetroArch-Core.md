@@ -96,17 +96,17 @@ alignment, values must fit their width, and only the mapped 16 MiB RAM and
 16 MiB VRAM ranges are accepted. Register targets are `r0`–`r15`, `sp`, `lr`,
 `pc`, and `cpsr`.
 
-Rules run once per frame after CPU execution and before video/audio output.
-They are frontend configuration, not part of a Save State. Reset and Load
-State therefore retain the current slots; after loading a state, enabled
-freezes apply again on the next running frame.
+Memory targets are write-protected: the value is applied as soon as the slot is
+enabled, and later writes that overlap the range are reverted immediately, so
+the game cannot change it between frames. Register targets run once per frame
+after CPU execution and before video/audio output.
 
-A freeze is a single write per frame, not a continuously held value, so the
-game can still rewrite the address between two applications. Set
-`SPMP8000_CHEAT_TRACE=1` in the environment that launches RetroArch to log
-enabled rules that the game overwrites before the next application. See the
-standalone [cheat diagnostics](Standalone-Emulator.md#diagnosing-freezes) for
-how to read the log.
+Cheat slots are frontend configuration, not part of a Save State. Reset and
+Load State retain the current slots and re-apply enabled memory freezes as soon
+as the state is restored. `SPMP8000_CHEAT_TRACE=1` logs rules whose value
+changed anyway, which means a writer bypassed the normal CPU write path. See
+the standalone [cheat diagnostics](Standalone-Emulator.md#diagnosing-freezes)
+for how to read the log.
 
 ## Live Core Options
 

@@ -187,19 +187,21 @@ RAM occupies `0x00000000`–`0x00FFFFFF`; VRAM occupies
 for core-managed cheats. Invalid rules are logged and ignored without stopping
 the game.
 
-Enabled rules are applied after game logic and before video/audio output on
-each running frame. Cheat rules are frontend configuration rather than
-emulator state: Reset and Load State retain the currently configured rules,
-and a loaded state receives the enabled freezes on the next running frame.
+Enabled memory rules write-protect their address: the frozen value is applied
+as soon as the rule is enabled, and any later write that overlaps the range is
+reverted immediately, so the game cannot change it between frames. Register
+rules are still written once per frame after game logic.
+
+Cheat rules are frontend configuration rather than emulator state: Reset and
+Load State retain the currently configured rules, and enabled freezes are
+re-applied as soon as the state is restored.
 
 ### Diagnosing freezes
 
-A freeze is a single write per emulated frame, not a continuously held value.
-Between two applications the game can still read and rewrite the address, so
-the frozen value only wins at the end of each frame.
-
-Set `SPMP8000_CHEAT_TRACE=1` to log every enabled memory rule whose value the
-game changed before the freeze was reapplied:
+Memory freezes normally need no diagnosis because the game cannot overwrite a
+protected address. Set `SPMP8000_CHEAT_TRACE=1` to log enabled rules whose value
+changed anyway, which means a writer bypassed the normal CPU write path (for
+example a frontend writing through a raw memory pointer):
 
 ```text
 [INFO  spmp8000emu_core::emulator] Cheat slot 0: mem16 at 0x00D4BF9C is 24 (frozen at 30); the game overwrote it during the frame
@@ -207,11 +209,10 @@ game changed before the freeze was reapplied:
 
 Use it to tell the two failure modes apart:
 
-- The line keeps appearing: the address is correct, but the game keeps writing
-  it. Damage that is applied and checked within a single frame can still defeat
-  the freeze.
-- The line never appears: the game never writes a different value there, which
-  usually means the address does not match the current game mode or level.
+- The line keeps appearing: a non-CPU writer is changing the address.
+- The line never appears but the effect is still wrong: the address likely does
+  not match the current game mode or level, or the game checks the value from a
+  CPU register without reading it back from memory.
 
 ## Loading Games
 

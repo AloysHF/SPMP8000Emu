@@ -6,7 +6,7 @@ use std::str::FromStr;
 use thiserror::Error;
 
 use crate::arm_cpu::ArmCpu;
-use crate::memory::{Memory, REG_CPSR};
+use crate::memory::{FrozenRange, Memory, REG_CPSR};
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum CheatParseError {
@@ -36,7 +36,8 @@ pub enum MemoryWidth {
 }
 
 impl MemoryWidth {
-    const fn bytes(self) -> u32 {
+    /// Byte width of the access.
+    pub const fn bytes(self) -> u32 {
         match self {
             Self::U8 => 1,
             Self::U16 => 2,
@@ -253,8 +254,11 @@ impl CheatManager {
 
     /// Report enabled memory rules whose value differs from the frozen one.
     ///
-    /// Call this before [`Self::apply`] to see which freezes the game has
-    /// already overwritten during the current frame.
+    /// Enabled memory rules write-protect their address, so this normally
+    /// stays empty. A non-empty report means a writer bypassed the normal CPU
+    /// write path, such as a frontend writing through a raw memory pointer.
+    /// Call this before [`Self::apply`] to inspect the state left by such a
+    /// writer.
     pub fn detect_clobbered(&self, memory: &Memory) -> Vec<CheatClobber> {
         let mut clobbered = Vec::new();
         for (&index, slot) in &self.slots {
@@ -293,6 +297,22 @@ impl CheatManager {
         for slot in self.slots.values().filter(|slot| slot.enabled) {
             slot.rule.apply(memory, cpu);
         }
+    }
+
+    /// Write-protected ranges for every enabled memory rule.
+    pub fn frozen_ranges(&self) -> Vec<FrozenRange> {
+        self.slots
+            .values()
+            .filter(|slot| slot.enabled)
+            .filter_map(|slot| match slot.rule {
+                CheatRule::Memory {
+                    width,
+                    address,
+                    value,
+                } => Some(FrozenRange::new(address, value, width.bytes() as u8)),
+                CheatRule::Register { .. } => None,
+            })
+            .collect()
     }
 }
 
@@ -485,5 +505,40 @@ mod tests {
         cheats.add_code("reg:r0=1", &memory).unwrap();
         cheats.clear();
         assert!(cheats.is_empty());
+    }
+
+    #[test]
+    fn exposes_frozen_ranges_for_enabled_memory_rules() {
+        let memory = memory();
+        let mut cheats = CheatManager::new();
+        cheats
+            .set_slot(0, true, "mem16:0x00001000=30", &memory)
+            .unwrap();
+        cheats
+            .set_slot(1, false, "mem8:0x00002000=1", &memory)
+            .unwrap();
+        cheats.set_slot(2, true, "reg:r0=1", &memory).unwrap();
+        cheats
+            .set_slot(3, true, "mem32:0x00003000=0xCAFEBABE", &memory)
+            .unwrap();
+
+        let ranges = cheats.frozen_ranges();
+        assert_eq!(ranges.len(), 2);
+        assert_eq!(
+            (
+                ranges[0].address(),
+                ranges[0].value(),
+                ranges[0].width_bytes()
+            ),
+            (0x1000, 30, 2)
+        );
+        assert_eq!(
+            (
+                ranges[1].address(),
+                ranges[1].value(),
+                ranges[1].width_bytes()
+            ),
+            (0x3000, 0xCAFE_BABE, 4)
+        );
     }
 }
