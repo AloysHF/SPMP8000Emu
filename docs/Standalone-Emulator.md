@@ -192,6 +192,27 @@ each running frame. Cheat rules are frontend configuration rather than
 emulator state: Reset and Load State retain the currently configured rules,
 and a loaded state receives the enabled freezes on the next running frame.
 
+### Diagnosing freezes
+
+A freeze is a single write per emulated frame, not a continuously held value.
+Between two applications the game can still read and rewrite the address, so
+the frozen value only wins at the end of each frame.
+
+Set `SPMP8000_CHEAT_TRACE=1` to log every enabled memory rule whose value the
+game changed before the freeze was reapplied:
+
+```text
+[INFO  spmp8000emu_core::emulator] Cheat slot 0: mem16 at 0x00D4BF9C is 24 (frozen at 30); the game overwrote it during the frame
+```
+
+Use it to tell the two failure modes apart:
+
+- The line keeps appearing: the address is correct, but the game keeps writing
+  it. Damage that is applied and checked within a single frame can still defeat
+  the freeze.
+- The line never appears: the game never writes a different value there, which
+  usually means the address does not match the current game mode or level.
+
 ## Loading Games
 
 The standalone emulator accepts `.bin` files in NGame1.0 format:

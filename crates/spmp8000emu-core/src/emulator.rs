@@ -20,6 +20,24 @@ use crate::input_handler::InputHandler;
 use crate::memory::{self, Memory};
 use crate::renderer::Renderer;
 
+fn cheat_trace_enabled() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("SPMP8000_CHEAT_TRACE").is_some())
+}
+
+fn report_clobbered_cheats(cheats: &CheatManager, memory: &Memory) {
+    for clobber in cheats.detect_clobbered(memory) {
+        log::info!(
+            "Cheat slot {}: mem{} at 0x{:08X} is {} (frozen at {}); the game overwrote it during the frame",
+            clobber.index,
+            clobber.width.bits(),
+            clobber.address,
+            clobber.actual,
+            clobber.expected
+        );
+    }
+}
+
 /// Platform-independent emulator core
 #[derive(Debug)]
 pub struct Emulator {
@@ -293,6 +311,9 @@ impl Emulator {
         }
 
         // Apply enabled freezes after game logic and before frame outputs.
+        if cheat_trace_enabled() {
+            report_clobbered_cheats(&self.cheats, &self.memory);
+        }
         self.cheats.apply(&mut self.memory, &mut self.cpu);
 
         for command in self.api.take_audio_commands() {

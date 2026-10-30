@@ -101,6 +101,13 @@ They are frontend configuration, not part of a Save State. Reset and Load
 State therefore retain the current slots; after loading a state, enabled
 freezes apply again on the next running frame.
 
+A freeze is a single write per frame, not a continuously held value, so the
+game can still rewrite the address between two applications. Set
+`SPMP8000_CHEAT_TRACE=1` in the environment that launches RetroArch to log
+enabled rules that the game overwrites before the next application. See the
+standalone [cheat diagnostics](Standalone-Emulator.md#diagnosing-freezes) for
+how to read the log.
+
 ## Live Core Options
 
 RetroArch exposes these settings under **Quick Menu > Core Options** while

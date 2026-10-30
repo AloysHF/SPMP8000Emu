@@ -44,7 +44,8 @@ impl MemoryWidth {
         }
     }
 
-    const fn bits(self) -> u32 {
+    /// Bit width of the access, as used in the `<target>=<value>` syntax.
+    pub const fn bits(self) -> u32 {
         self.bytes() * 8
     }
 
@@ -176,6 +177,16 @@ pub struct CheatSlot {
     pub rule: CheatRule,
 }
 
+/// A frozen memory rule whose value the game changed before the next freeze.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CheatClobber {
+    pub index: u32,
+    pub width: MemoryWidth,
+    pub address: u32,
+    pub expected: u32,
+    pub actual: u32,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CheatManager {
     slots: BTreeMap<u32, CheatSlot>,
@@ -187,6 +198,7 @@ impl CheatManager {
     }
 
     pub fn clear(&mut self) {
+        log::debug!("Cleared {} cheat slots", self.slots.len());
         self.slots.clear();
     }
 
@@ -205,6 +217,7 @@ impl CheatManager {
 
         let rule = CheatRule::from_str(code)?;
         rule.validate(memory)?;
+        log::debug!("Cheat slot {index} set: enabled={enabled} code='{code}'");
         self.slots.insert(
             index,
             CheatSlot {
@@ -236,6 +249,44 @@ impl CheatManager {
 
     pub fn is_empty(&self) -> bool {
         self.slots.is_empty()
+    }
+
+    /// Report enabled memory rules whose value differs from the frozen one.
+    ///
+    /// Call this before [`Self::apply`] to see which freezes the game has
+    /// already overwritten during the current frame.
+    pub fn detect_clobbered(&self, memory: &Memory) -> Vec<CheatClobber> {
+        let mut clobbered = Vec::new();
+        for (&index, slot) in &self.slots {
+            if !slot.enabled {
+                continue;
+            }
+            let CheatRule::Memory {
+                width,
+                address,
+                value,
+            } = slot.rule
+            else {
+                continue;
+            };
+            let actual = match width {
+                MemoryWidth::U8 => memory.read_u8(address).map(u32::from),
+                MemoryWidth::U16 => memory.read_u16(address).map(u32::from),
+                MemoryWidth::U32 => memory.read_u32(address),
+            };
+            if let Ok(actual) = actual {
+                if actual != value {
+                    clobbered.push(CheatClobber {
+                        index,
+                        width,
+                        address,
+                        expected: value,
+                        actual,
+                    });
+                }
+            }
+        }
+        clobbered
     }
 
     pub fn apply(&self, memory: &mut Memory, cpu: &mut ArmCpu) {
@@ -372,6 +423,51 @@ mod tests {
         assert_eq!(memory.read_u16(VRAM_BASE + 2).unwrap(), u16::MAX);
         assert_eq!(cpu.regs.r5, 0xCAFE_BABE);
         assert_eq!(memory.get_register(5), 0xCAFE_BABE);
+    }
+
+    #[test]
+    fn detects_enabled_memory_rules_overwritten_before_the_next_freeze() {
+        let mut memory = memory();
+        let mut cheats = CheatManager::new();
+        let wide = RAM_BASE + 0x200;
+        cheats.set_slot(0, true, "mem8:0x100=1", &memory).unwrap();
+        cheats.set_slot(1, false, "mem8:0x101=2", &memory).unwrap();
+        cheats
+            .set_slot(2, true, &format!("mem32:0x{wide:08X}=0x11223344"), &memory)
+            .unwrap();
+        cheats.set_slot(3, true, "reg:r0=7", &memory).unwrap();
+
+        memory.write_u8(0x100, 1).unwrap();
+        memory.write_u32(wide, 0x1122_3344).unwrap();
+        assert!(cheats.detect_clobbered(&memory).is_empty());
+
+        memory.write_u8(0x100, 9).unwrap();
+        memory.write_u8(0x101, 9).unwrap();
+        memory.write_u32(wide, 0x5566_7788).unwrap();
+
+        assert_eq!(
+            cheats.detect_clobbered(&memory),
+            vec![
+                CheatClobber {
+                    index: 0,
+                    width: MemoryWidth::U8,
+                    address: 0x100,
+                    expected: 1,
+                    actual: 9,
+                },
+                CheatClobber {
+                    index: 2,
+                    width: MemoryWidth::U32,
+                    address: wide,
+                    expected: 0x1122_3344,
+                    actual: 0x5566_7788,
+                },
+            ]
+        );
+
+        let mut cpu = ArmCpu::new().unwrap();
+        cheats.apply(&mut memory, &mut cpu);
+        assert!(cheats.detect_clobbered(&memory).is_empty());
     }
 
     #[test]
