@@ -114,8 +114,19 @@ pub extern "C" fn retro_load_game(info: *const retro_game_info) -> bool {
         let game_info = &*info;
 
         if game_info.path.is_null() {
-            log::error!("Game path is null");
+            // need_fullpath is true, so a file path is the only supported input.
+            // Memory buffers cannot be mapped into the NGame loader, which reads
+            // the file, parses its header and derives the game directory.
+            log::error!(
+                "SPMP8000Emu requires a file path: in-memory content is not supported \
+                 (need_fullpath = true); pass the .bin content as a filesystem path"
+            );
             return false;
+        }
+        if !game_info.data.is_null() || game_info.size != 0 {
+            log::warn!(
+                "Ignoring the in-memory buffer supplied for content; loading from the path instead"
+            );
         }
 
         let path = match CStr::from_ptr(game_info.path).to_str() {
