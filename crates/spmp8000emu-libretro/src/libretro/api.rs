@@ -354,11 +354,38 @@ pub extern "C" fn retro_load_game_special(
     })
 }
 
+/// Save-state envelope: 4-byte magic followed by a little-endian format
+/// version. The serialized payload itself keeps the core's existing layout and
+/// is passed through unchanged; bump the version only when the payload format
+/// changes, so stale states are rejected instead of silently misread.
+const SAVE_STATE_MAGIC: [u8; 4] = *b"SP8S";
+const SAVE_STATE_FORMAT: u32 = 1;
+const SAVE_STATE_HEADER_LEN: usize = SAVE_STATE_MAGIC.len() + std::mem::size_of::<u32>();
+
+fn write_save_state_header(buffer: &mut [u8]) {
+    buffer[..SAVE_STATE_MAGIC.len()].copy_from_slice(&SAVE_STATE_MAGIC);
+    buffer[SAVE_STATE_MAGIC.len()..SAVE_STATE_HEADER_LEN]
+        .copy_from_slice(&SAVE_STATE_FORMAT.to_le_bytes());
+}
+
+/// Returns `Some(payload)` when the envelope matches this build's format.
+fn read_save_state_payload(data: &[u8]) -> Option<&[u8]> {
+    if data.len() < SAVE_STATE_HEADER_LEN || data[..SAVE_STATE_MAGIC.len()] != SAVE_STATE_MAGIC {
+        return None;
+    }
+    let version = u32::from_le_bytes(
+        data[SAVE_STATE_MAGIC.len()..SAVE_STATE_HEADER_LEN]
+            .try_into()
+            .ok()?,
+    );
+    (version == SAVE_STATE_FORMAT).then(|| &data[SAVE_STATE_HEADER_LEN..])
+}
+
 #[no_mangle]
 pub extern "C" fn retro_serialize_size() -> usize {
     guard(0, || unsafe {
         match EMULATOR.as_ref() {
-            Some(emu) => emu.serialize_size(),
+            Some(emu) => emu.serialize_size() + SAVE_STATE_HEADER_LEN,
             None => 0,
         }
     })
@@ -370,13 +397,14 @@ pub extern "C" fn retro_serialize(data: *mut c_void, size: usize) -> bool {
         let Some(emu) = EMULATOR.as_ref() else {
             return false;
         };
-        let required_size = emu.serialize_size();
+        let required_size = emu.serialize_size() + SAVE_STATE_HEADER_LEN;
         if data.is_null() || size < required_size {
             return false;
         }
 
         let buffer = std::slice::from_raw_parts_mut(data as *mut u8, required_size);
-        match emu.serialize(buffer) {
+        write_save_state_header(buffer);
+        match emu.serialize(&mut buffer[SAVE_STATE_HEADER_LEN..]) {
             Ok(()) => true,
             Err(error) => {
                 log::error!("Failed to serialize game state: {}", error);
@@ -397,7 +425,11 @@ pub extern "C" fn retro_unserialize(data: *const c_void, size: usize) -> bool {
         }
 
         let buffer = std::slice::from_raw_parts(data as *const u8, size);
-        match emu.deserialize(buffer) {
+        let Some(payload) = read_save_state_payload(buffer) else {
+            log::warn!("Rejecting save state with an unknown magic or format version");
+            return false;
+        };
+        match emu.deserialize(payload) {
             Ok(()) => true,
             Err(error) => {
                 log::error!("Failed to restore game state: {}", error);
@@ -839,6 +871,40 @@ mod tests {
             cmd,
             RETRO_ENVIRONMENT_GET_VARIABLE | RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE
         )
+    }
+
+    #[test]
+    fn save_state_envelope_rejects_other_versions() {
+        let mut buffer = [0_u8; SAVE_STATE_HEADER_LEN + 3];
+        buffer[SAVE_STATE_HEADER_LEN..].copy_from_slice(&[1, 2, 3]);
+        write_save_state_header(&mut buffer);
+        assert_eq!(
+            read_save_state_payload(&buffer),
+            Some(&[1_u8, 2, 3][..]),
+            "a freshly written envelope must be accepted"
+        );
+
+        buffer[SAVE_STATE_MAGIC.len()] = 0xFF;
+        assert_eq!(
+            read_save_state_payload(&buffer),
+            None,
+            "a state from another format version must be rejected"
+        );
+
+        let truncated = [0_u8; SAVE_STATE_HEADER_LEN - 1];
+        assert_eq!(
+            read_save_state_payload(&truncated),
+            None,
+            "a buffer shorter than the envelope must be rejected"
+        );
+
+        let mut foreign = [0_u8; SAVE_STATE_HEADER_LEN];
+        foreign[..SAVE_STATE_MAGIC.len()].copy_from_slice(b"N32S");
+        assert_eq!(
+            read_save_state_payload(&foreign),
+            None,
+            "a state from another system must be rejected"
+        );
     }
 
     #[test]
