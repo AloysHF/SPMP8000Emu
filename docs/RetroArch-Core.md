@@ -71,13 +71,14 @@ buffers keep stable host addresses across Reset and Load State.
 ## Cheats
 
 SPMP8000Emu uses RetroArch's **Emulator** cheat handler. Enter the same rules
-accepted by the standalone `--cheat` option:
+accepted by the standalone `--cheat` option. Ready-to-use rules for known games
+are listed in [Game Cheat Codes](Game-Cheats.md):
 
 ```text
 mem8:0x00123456=99
 mem16:0x00124000=999
 mem32:0x01001000=0x12345678
-ptr16:0x00BBE054+0xCC=300
+ptr16:0x00123460+0x20=300
 reg:r0=0x1234
 ```
 

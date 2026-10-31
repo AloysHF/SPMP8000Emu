@@ -161,14 +161,15 @@ display filter, or letterboxing.
 ## Cheats
 
 Use repeatable `--cheat <RULE>` options to freeze values in the emulated
-address space:
+address space. Ready-to-use rules for known games are listed in
+[Game Cheat Codes](Game-Cheats.md):
 
 ```bash
 spmp8000-emu \
   --cheat "mem8:0x00123456=99" \
   --cheat "mem16:0x00124000=999" \
   --cheat "mem32:0x01001000=0x12345678" \
-  --cheat "ptr16:0x00BBE054+0xCC=300" \
+  --cheat "ptr16:0x00123460+0x20=300" \
   --cheat "reg:r0=0x1234" \
   path/to/game.bin
 ```
