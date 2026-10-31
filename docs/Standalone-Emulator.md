@@ -174,6 +174,10 @@ spmp8000-emu \
   path/to/game.bin
 ```
 
+The `ptr16` line only demonstrates the syntax. Use a verified code from
+[Game Cheat Codes](Game-Cheats.md) or a base and offset discovered for the
+game; placeholder addresses do not affect gameplay.
+
 Supported targets are:
 
 | Target | Value range | Requirements |

@@ -82,6 +82,10 @@ ptr16:0x00123460+0x20=300
 reg:r0=0x1234
 ```
 
+The `ptr16` line only demonstrates the syntax. Use a verified code from
+[Game Cheat Codes](Game-Cheats.md) or a base and offset discovered for the
+game; placeholder addresses do not affect gameplay.
+
 To configure a rule:
 
 1. Load a game and open **Quick Menu > Cheats**.
