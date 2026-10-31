@@ -36,7 +36,7 @@ ARM-based CPU and HLE system API.
 - **True reset** — rebuilds CPU, memory, HLE, graphics, audio, and input runtime state
 - **Save states** — versioned, checksummed snapshots of the complete emulator runtime
 - **Live core options** — adjust volume, O/X layout, and diagnostics without resetting the game
-- **Memory and cheats** — inspect SPMP RAM/VRAM and write-protect validated memory addresses or set ARM registers (`SPMP8000_CHEAT_TRACE=1` logs values changed outside the normal CPU path)
+- **Memory and cheats** — inspect SPMP RAM/VRAM and write-protect validated memory addresses, follow stored pointers, or set ARM registers (`SPMP8000_CHEAT_TRACE=1` logs values changed outside the normal CPU path)
 - **Standalone mode** — minifb window with CLI
 - **Cross-platform** — Windows, macOS, Linux, Android, iOS, webOS, and modern browsers
 - **Headless mode** — run without a window for testing and batch processing

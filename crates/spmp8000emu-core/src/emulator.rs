@@ -240,9 +240,19 @@ impl Emulator {
 
     /// Apply enabled rules and refresh the write-protected memory ranges.
     fn sync_cheat_freezes(&mut self) {
-        let ranges = self.cheats.frozen_ranges();
+        let ranges = self.cheats.frozen_ranges(&self.memory);
         self.memory.set_frozen_ranges(ranges);
         self.cheats.apply(&mut self.memory, &mut self.cpu);
+    }
+
+    /// Re-resolve pointer cheats before the frame so a moved object stays frozen.
+    fn refresh_pointer_freezes(&mut self) {
+        if !self.cheats.has_pointer_rules() {
+            return;
+        }
+        let ranges = self.cheats.frozen_ranges(&self.memory);
+        self.memory.set_frozen_ranges(ranges);
+        self.cheats.apply_memory(&mut self.memory);
     }
 
     /// Execute one frame (30fps)
@@ -253,6 +263,9 @@ impl Emulator {
         if !self.is_running {
             return;
         }
+
+        // Pointer rules must be resolved against this frame's memory state.
+        self.refresh_pointer_freezes();
 
         // Execute CPU instructions for one frame
         // SPMP8000 runs at ~7.37MHz, so at 30fps that's ~245,760 instructions per frame
@@ -785,6 +798,26 @@ mod tests {
         emu.set_cheat_slot(0, false, "mem16:0x00001000=30").unwrap();
         emu.memory.write_u16(RAM_BASE + 0x1000, 7).unwrap();
         assert_eq!(emu.memory.read_u16(RAM_BASE + 0x1000).unwrap(), 7);
+    }
+
+    #[test]
+    fn pointer_cheats_follow_the_object_across_frames() {
+        let mut emu = test_emulator(100);
+        let base = RAM_BASE + 0x2000;
+        let first = RAM_BASE + 0x3000;
+        let second = RAM_BASE + 0x4000;
+        emu.memory.write_u32(base, first).unwrap();
+        emu.add_cheat(&format!("ptr16:0x{base:08X}+0x10=300"))
+            .unwrap();
+        assert_eq!(emu.memory.read_u16(first + 0x10).unwrap(), 300);
+
+        emu.memory.write_u32(base, second).unwrap();
+        emu.start();
+        emu.tick();
+        assert_eq!(emu.memory.read_u16(second + 0x10).unwrap(), 300);
+
+        emu.memory.write_u16(second + 0x10, 7).unwrap();
+        assert_eq!(emu.memory.read_u16(second + 0x10).unwrap(), 300);
     }
 
     #[test]

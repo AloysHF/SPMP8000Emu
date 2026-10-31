@@ -50,7 +50,7 @@ spmp8000-emu [OPTIONS] <GAME_PATH>
 | `--no-gamepad` | flag | off | Disable physical gamepad input; keyboard remains available. |
 | `--remap <BUTTON:KEY>` | repeatable mapping | — | Replace a standalone keyboard mapping. |
 | `--show-gamepad` | flag | off | Draw the effective logical button state over the displayed frame. |
-| `--cheat <RULE>` | repeatable rule | — | Freeze a RAM/VRAM value or ARM register once per frame. |
+| `--cheat <RULE>` | repeatable rule | — | Freeze a RAM/VRAM value, a pointer target, or an ARM register. |
 | `--debug-logging` | flag | off | Enable sampled CPU debug records and HLE debug records. |
 | `--unknown-instruction-policy <MODE>` | `stop`, `skip` | `stop` | Stop on unknown ARM instructions or skip them for diagnostics. |
 | `--headless` | flag | off | Run without opening a window (for testing/batch processing). |
@@ -168,6 +168,7 @@ spmp8000-emu \
   --cheat "mem8:0x00123456=99" \
   --cheat "mem16:0x00124000=999" \
   --cheat "mem32:0x01001000=0x12345678" \
+  --cheat "ptr16:0x00BBE054+0xCC=300" \
   --cheat "reg:r0=0x1234" \
   path/to/game.bin
 ```
@@ -179,6 +180,9 @@ Supported targets are:
 | `mem8:<ADDRESS>` | `0`–`255` | Address must be in RAM or VRAM. |
 | `mem16:<ADDRESS>` | `0`–`65535` | Address must be in RAM or VRAM and 2-byte aligned. |
 | `mem32:<ADDRESS>` | `0`–`4294967295` | Address must be in RAM or VRAM and 4-byte aligned. |
+| `ptr8:<BASE>+<OFFSET>` | `0`–`255` | `BASE` must hold a 4-byte pointer in RAM or VRAM. |
+| `ptr16:<BASE>+<OFFSET>` | `0`–`65535` | Same as `ptr8`, target must be 2-byte aligned. |
+| `ptr32:<BASE>+<OFFSET>` | `0`–`4294967295` | Same as `ptr8`, target must be 4-byte aligned. |
 | `reg:<REGISTER>` | 32-bit unsigned | `r0`–`r15`, `sp`, `lr`, `pc`, or `cpsr`. |
 
 Addresses and values accept decimal or `0x`-prefixed hexadecimal notation.
@@ -187,10 +191,12 @@ RAM occupies `0x00000000`–`0x00FFFFFF`; VRAM occupies
 for core-managed cheats. Invalid rules are logged and ignored without stopping
 the game.
 
-Enabled memory rules write-protect their address: the frozen value is applied
-as soon as the rule is enabled, and any later write that overlaps the range is
-reverted immediately, so the game cannot change it between frames. Register
-rules are still written once per frame after game logic.
+Memory rules write-protect their address: the frozen value is applied as soon
+as the rule is enabled, and any later write that overlaps the range is reverted
+immediately, so the game cannot change it between frames. Pointer rules read
+the pointer again before every frame, so they keep working when the game moves
+the owning object to a different heap address, for example after loading a new
+level. Register rules are still written once per frame after game logic.
 
 Cheat rules are frontend configuration rather than emulator state: Reset and
 Load State retain the currently configured rules, and enabled freezes are
@@ -211,8 +217,12 @@ Use it to tell the two failure modes apart:
 
 - The line keeps appearing: a non-CPU writer is changing the address.
 - The line never appears but the effect is still wrong: the address likely does
-  not match the current game mode or level, or the game checks the value from a
-  CPU register without reading it back from memory.
+  not match the current game mode or level, the pointer base or offset is
+  wrong, or the game checks the value from a CPU register without reading it
+  back from memory.
+
+Pointer rules skip writes while the stored pointer is null or resolves outside
+writable RAM/VRAM, so a rule can be enabled before the game creates its object.
 
 ## Loading Games
 

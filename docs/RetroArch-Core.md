@@ -77,6 +77,7 @@ accepted by the standalone `--cheat` option:
 mem8:0x00123456=99
 mem16:0x00124000=999
 mem32:0x01001000=0x12345678
+ptr16:0x00BBE054+0xCC=300
 reg:r0=0x1234
 ```
 
@@ -98,8 +99,11 @@ alignment, values must fit their width, and only the mapped 16 MiB RAM and
 
 Memory targets are write-protected: the value is applied as soon as the slot is
 enabled, and later writes that overlap the range are reverted immediately, so
-the game cannot change it between frames. Register targets run once per frame
-after CPU execution and before video/audio output.
+the game cannot change it between frames. Pointer targets
+(`ptr8/ptr16/ptr32:<BASE>+<OFFSET>`) read the 32-bit pointer stored at `BASE`
+again before every frame, so they keep working when the game moves the owning
+object to another heap address. Register targets run once per frame after CPU
+execution and before video/audio output.
 
 Cheat slots are frontend configuration, not part of a Save State. Reset and
 Load State retain the current slots and re-apply enabled memory freezes as soon
