@@ -30,65 +30,91 @@ unsafe fn get_emulator_mut() -> &'static mut Emulator {
     EMULATOR.as_mut().expect("Emulator not initialized")
 }
 
+/// Run `body`, turning a panic into `fallback`.
+///
+/// A panic must never unwind across the C ABI: the frontend is a host process
+/// (RetroArch, RetroDroid) that would be torn down with us. Swallowing the
+/// panic keeps the session recoverable and leaves a log entry behind.
+fn guard<T>(fallback: T, body: impl FnOnce() -> T) -> T {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(body)) {
+        Ok(value) => value,
+        Err(payload) => {
+            let detail = payload
+                .downcast_ref::<&str>()
+                .map(|text| (*text).to_owned())
+                .or_else(|| payload.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "unknown panic".to_owned());
+            log::error!("SPMP8000Emu libretro entry point panicked: {detail}");
+            fallback
+        }
+    }
+}
+
 // ============================================================
 // Startup functions
 // ============================================================
 
 #[no_mangle]
 pub extern "C" fn retro_set_environment(cb: retro_environment_t) {
-    callbacks::set_environment(cb);
-    set_core_options();
+    guard((), || {
+        callbacks::set_environment(cb);
+        set_core_options();
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_video_refresh(cb: retro_video_refresh_t) {
-    callbacks::set_video_refresh(cb);
+    guard((), || callbacks::set_video_refresh(cb));
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_audio_sample(cb: retro_audio_sample_t) {
-    callbacks::set_audio_sample(cb);
+    guard((), || callbacks::set_audio_sample(cb));
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_audio_sample_batch(cb: retro_audio_sample_batch_t) {
-    callbacks::set_audio_sample_batch(cb);
+    guard((), || callbacks::set_audio_sample_batch(cb));
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_input_poll(cb: retro_input_poll_t) {
-    callbacks::set_input_poll(cb);
+    guard((), || callbacks::set_input_poll(cb));
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_input_state(cb: retro_input_state_t) {
-    callbacks::set_input_state(cb);
+    guard((), || callbacks::set_input_state(cb));
 }
 
 #[no_mangle]
 pub extern "C" fn retro_api_version() -> u32 {
-    RETRO_API_VERSION
+    guard(RETRO_API_VERSION, || RETRO_API_VERSION)
 }
 
 #[no_mangle]
 pub extern "C" fn retro_init() {
-    callbacks::init_log();
-    super::logger::init();
-    log::info!("SPMP8000Emu libretro core initialized");
+    guard((), || {
+        callbacks::init_log();
+        super::logger::init();
+        log::info!("SPMP8000Emu libretro core initialized");
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_deinit() {
-    unsafe {
-        EMULATOR = None;
-    }
-    super::logger::set_debug_logging(false);
-    log::info!("SPMP8000Emu libretro core deinitialized");
+    guard((), || {
+        unsafe {
+            EMULATOR = None;
+        }
+        super::logger::set_debug_logging(false);
+        log::info!("SPMP8000Emu libretro core deinitialized");
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_get_system_info(info: *mut retro_system_info) {
-    unsafe {
+    guard((), || unsafe {
         (*info) = retro_system_info {
             library_name: c"SPMP8000Emu".as_ptr(),
             library_version: c"1.0.0".as_ptr(),
@@ -96,12 +122,14 @@ pub extern "C" fn retro_get_system_info(info: *mut retro_system_info) {
             need_fullpath: true,
             block_extract: false,
         };
-    }
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_controller_port_device(_port: u32, _device: u32) {
-    // SPMP8000 only supports basic joypad
+    guard((), || {
+        // SPMP8000 only supports basic joypad.
+    });
 }
 
 // ============================================================
@@ -110,7 +138,7 @@ pub extern "C" fn retro_set_controller_port_device(_port: u32, _device: u32) {
 
 #[no_mangle]
 pub extern "C" fn retro_load_game(info: *const retro_game_info) -> bool {
-    unsafe {
+    guard(false, || unsafe {
         let game_info = &*info;
 
         if game_info.path.is_null() {
@@ -189,7 +217,7 @@ pub extern "C" fn retro_load_game(info: *const retro_game_info) -> bool {
                  Only NGame .bin games are supported."
             )),
         }
-    }
+    })
 }
 
 /// Report a load failure to both the log and the frontend's on-screen message.
@@ -201,15 +229,17 @@ fn fail(message: &str) -> bool {
 
 #[no_mangle]
 pub extern "C" fn retro_unload_game() {
-    unsafe {
-        EMULATOR = None;
-    }
-    log::info!("Game unloaded");
+    guard((), || {
+        unsafe {
+            EMULATOR = None;
+        }
+        log::info!("Game unloaded");
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_get_system_av_info(info: *mut retro_system_av_info) {
-    unsafe {
+    guard((), || unsafe {
         let emu = get_emulator();
         let (width, height) = emu.get_resolution();
         let sample_rate = emu.get_audio_sample_rate();
@@ -227,12 +257,12 @@ pub extern "C" fn retro_get_system_av_info(info: *mut retro_system_av_info) {
                 sample_rate,
             },
         };
-    }
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_run() {
-    unsafe {
+    guard((), || unsafe {
         if core_options_changed() {
             let config = read_core_config();
             super::logger::set_debug_logging(config.debug_logging);
@@ -292,7 +322,7 @@ pub extern "C" fn retro_run() {
         if !samples.is_empty() {
             callbacks::audio_sample_batch(samples.as_ptr(), samples.len() / 2);
         }
-    }
+    });
 }
 
 fn log_core_config(action: &str, config: &CoreConfig) {
@@ -316,25 +346,27 @@ pub extern "C" fn retro_load_game_special(
     _info: *const retro_game_info,
     _num: usize,
 ) -> bool {
-    fail(
-        "SPMP8000Emu: special content loading is not supported.\n\n\
-         Load the NGame .bin game directly.",
-    )
+    guard(false, || {
+        fail(
+            "SPMP8000Emu: special content loading is not supported.\n\n\
+             Load the NGame .bin game directly.",
+        )
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn retro_serialize_size() -> usize {
-    unsafe {
+    guard(0, || unsafe {
         match EMULATOR.as_ref() {
             Some(emu) => emu.serialize_size(),
             None => 0,
         }
-    }
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn retro_serialize(data: *mut c_void, size: usize) -> bool {
-    unsafe {
+    guard(false, || unsafe {
         let Some(emu) = EMULATOR.as_ref() else {
             return false;
         };
@@ -351,12 +383,12 @@ pub extern "C" fn retro_serialize(data: *mut c_void, size: usize) -> bool {
                 false
             }
         }
-    }
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn retro_unserialize(data: *const c_void, size: usize) -> bool {
-    unsafe {
+    guard(false, || unsafe {
         let Some(emu) = EMULATOR.as_mut() else {
             return false;
         };
@@ -372,26 +404,26 @@ pub extern "C" fn retro_unserialize(data: *const c_void, size: usize) -> bool {
                 false
             }
         }
-    }
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn retro_get_region() -> u32 {
-    RETRO_REGION_NTSC
+    guard(RETRO_REGION_NTSC, || RETRO_REGION_NTSC)
 }
 
 #[no_mangle]
 pub extern "C" fn retro_cheat_reset() {
-    unsafe {
+    guard((), || unsafe {
         if let Some(emu) = EMULATOR.as_mut() {
             emu.clear_cheats();
         }
-    }
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_cheat_set(index: u32, enabled: bool, code: *const std::ffi::c_char) {
-    unsafe {
+    guard((), || unsafe {
         let Some(emu) = EMULATOR.as_mut() else {
             return;
         };
@@ -415,12 +447,12 @@ pub extern "C" fn retro_cheat_set(index: u32, enabled: bool, code: *const std::f
                 error
             );
         }
-    }
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_reset() {
-    unsafe {
+    guard((), || unsafe {
         if let Some(emu) = EMULATOR.as_mut() {
             match emu.reset() {
                 Ok(()) => {
@@ -430,12 +462,12 @@ pub extern "C" fn retro_reset() {
                 Err(error) => log::error!("Failed to reset game: {}", error),
             }
         }
-    }
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_get_memory_data(id: u32) -> *mut c_void {
-    unsafe {
+    guard(ptr::null_mut(), || unsafe {
         let Some(emu) = EMULATOR.as_mut() else {
             return ptr::null_mut();
         };
@@ -450,12 +482,12 @@ pub extern "C" fn retro_get_memory_data(id: u32) -> *mut c_void {
                 .map_or(ptr::null_mut(), |vram| vram.as_mut_ptr().cast()),
             _ => ptr::null_mut(),
         }
-    }
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn retro_get_memory_size(id: u32) -> usize {
-    unsafe {
+    guard(0, || unsafe {
         let Some(emu) = EMULATOR.as_ref() else {
             return 0;
         };
@@ -464,7 +496,7 @@ pub extern "C" fn retro_get_memory_size(id: u32) -> usize {
             RETRO_MEMORY_VIDEO_RAM => emu.memory.video_ram().map_or(0, <[u8]>::len),
             _ => 0,
         }
-    }
+    })
 }
 
 fn memory_descriptors(memory: &mut Memory) -> Option<[retro_memory_descriptor; 3]> {
