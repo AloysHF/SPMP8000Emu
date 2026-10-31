@@ -64,12 +64,61 @@ pub struct MemoryRegion {
     pub name: String,
 }
 
+/// A memory range held at a fixed value by an active cheat freeze.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FrozenRange {
+    address: u32,
+    value: u32,
+    width_bytes: u8,
+}
+
+impl FrozenRange {
+    /// Create a little-endian range covering one to four bytes.
+    #[must_use]
+    pub fn new(address: u32, value: u32, width_bytes: u8) -> Self {
+        debug_assert!((1..=4).contains(&width_bytes));
+        Self {
+            address,
+            value,
+            width_bytes,
+        }
+    }
+
+    pub fn address(self) -> u32 {
+        self.address
+    }
+
+    pub fn value(self) -> u32 {
+        self.value
+    }
+
+    pub fn width_bytes(self) -> u8 {
+        self.width_bytes
+    }
+
+    fn end(self) -> u32 {
+        self.address.saturating_add(u32::from(self.width_bytes))
+    }
+
+    fn contains(self, address: u32) -> bool {
+        address >= self.address && address < self.end()
+    }
+
+    fn byte_at(self, address: u32) -> u8 {
+        (self.value >> ((address - self.address) * 8)) as u8
+    }
+}
+
 /// Main memory manager
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Memory {
     regions: Vec<MemoryRegion>,
     /// Register file (R0-R15, CPSR)
     registers: [u32; 17],
+    /// Frozen ranges are owned by the active frontend cheat rules and are not
+    /// part of a save state.
+    #[serde(skip)]
+    frozen: Vec<FrozenRange>,
 }
 
 /// Register indices
@@ -109,6 +158,7 @@ impl Memory {
         Self {
             regions: Vec::new(),
             registers: [0; 17],
+            frozen: Vec::new(),
         }
     }
 
@@ -228,7 +278,23 @@ impl Memory {
             .ok_or_else(|| anyhow::anyhow!("Write to unmapped address: 0x{:08X}", addr))?;
         let offset = (addr - region.base) as usize;
         region.data[offset] = value;
+        self.restore_frozen_byte(addr);
         Ok(())
+    }
+
+    /// Re-apply a frozen byte so writes cannot change a protected address.
+    fn restore_frozen_byte(&mut self, addr: u32) {
+        for index in 0..self.frozen.len() {
+            let frozen = self.frozen[index];
+            if !frozen.contains(addr) {
+                continue;
+            }
+            let value = frozen.byte_at(addr);
+            if let Some(region) = self.find_region_mut(addr) {
+                let offset = (addr - region.base) as usize;
+                region.data[offset] = value;
+            }
+        }
     }
 
     /// Read a 16-bit value (little-endian)
@@ -344,6 +410,14 @@ impl Memory {
         self.region_for_range(addr, size).is_some_and(|region| {
             region.permissions.write && matches!(region.base, RAM_BASE | VRAM_BASE)
         })
+    }
+
+    /// Replace the write-protected ranges held by active memory freezes.
+    ///
+    /// Every later write that overlaps one of these ranges is reverted in
+    /// place, so the game cannot change the value between frames.
+    pub fn set_frozen_ranges(&mut self, ranges: Vec<FrozenRange>) {
+        self.frozen = ranges;
     }
 
     /// Copy a validated memory state while preserving frontend-visible pointers.
@@ -511,5 +585,35 @@ mod tests {
         assert_eq!(destination.read_u32(RAM_BASE + 4).unwrap(), 0x1234_5678);
         assert_eq!(destination.read_u32(VRAM_BASE + 8).unwrap(), 0xCAFE_BABE);
         assert_eq!(destination.get_register(REG_R5), 99);
+    }
+
+    #[test]
+    fn frozen_ranges_revert_overlapping_writes() {
+        let mut memory = Memory::new();
+        memory.init_default().unwrap();
+        memory.set_frozen_ranges(vec![FrozenRange::new(RAM_BASE + 0x1004, 0x1234_5678, 4)]);
+
+        memory.write_u8(RAM_BASE + 0x1004, 0xFF).unwrap();
+        memory.write_u16(RAM_BASE + 0x1004, 0xFFFF).unwrap();
+        memory.write_u32(RAM_BASE + 0x1004, 0).unwrap();
+        assert_eq!(memory.read_u32(RAM_BASE + 0x1004).unwrap(), 0x1234_5678);
+
+        memory.write_u8(RAM_BASE + 0x1008, 0xAA).unwrap();
+        assert_eq!(memory.read_u8(RAM_BASE + 0x1008).unwrap(), 0xAA);
+    }
+
+    #[test]
+    fn frozen_ranges_block_partial_overlap_and_can_be_cleared() {
+        let mut memory = Memory::new();
+        memory.init_default().unwrap();
+        memory.set_frozen_ranges(vec![FrozenRange::new(RAM_BASE + 0x1004, 0x1234, 2)]);
+
+        memory.write_u32(RAM_BASE + 0x1002, 0xFFFF_FFFF).unwrap();
+        assert_eq!(memory.read_u16(RAM_BASE + 0x1002).unwrap(), 0xFFFF);
+        assert_eq!(memory.read_u16(RAM_BASE + 0x1004).unwrap(), 0x1234);
+
+        memory.set_frozen_ranges(Vec::new());
+        memory.write_u16(RAM_BASE + 0x1004, 7).unwrap();
+        assert_eq!(memory.read_u16(RAM_BASE + 0x1004).unwrap(), 7);
     }
 }

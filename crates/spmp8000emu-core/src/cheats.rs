@@ -6,7 +6,7 @@ use std::str::FromStr;
 use thiserror::Error;
 
 use crate::arm_cpu::ArmCpu;
-use crate::memory::{Memory, REG_CPSR};
+use crate::memory::{FrozenRange, Memory, REG_CPSR};
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum CheatParseError {
@@ -24,6 +24,12 @@ pub enum CheatParseError {
     MisalignedAddress(u32, u32),
     #[error("memory range 0x{address:08X}..0x{end:08X} is not writable RAM or VRAM")]
     InvalidMemoryRange { address: u32, end: u32 },
+    #[error("pointer rule must use '<base>+<offset>' as its target")]
+    InvalidPointerTarget(String),
+    #[error("pointer base 0x{0:08X} is not 4-byte aligned")]
+    MisalignedPointerBase(u32),
+    #[error("pointer base 0x{address:08X} is not a 32-bit value in writable RAM or VRAM")]
+    InvalidPointerBase { address: u32 },
     #[error("unknown ARM register '{0}'")]
     InvalidRegister(String),
 }
@@ -36,7 +42,8 @@ pub enum MemoryWidth {
 }
 
 impl MemoryWidth {
-    const fn bytes(self) -> u32 {
+    /// Byte width of the access.
+    pub const fn bytes(self) -> u32 {
         match self {
             Self::U8 => 1,
             Self::U16 => 2,
@@ -44,7 +51,8 @@ impl MemoryWidth {
         }
     }
 
-    const fn bits(self) -> u32 {
+    /// Bit width of the access, as used in the `<target>=<value>` syntax.
+    pub const fn bits(self) -> u32 {
         self.bytes() * 8
     }
 
@@ -63,11 +71,21 @@ pub enum ArmRegister {
     Cpsr,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CheatRule {
     Memory {
         width: MemoryWidth,
         address: u32,
+        value: u32,
+    },
+    /// Follow a 32-bit pointer stored at `base` and patch `base_value + offset`.
+    ///
+    /// The pointer is re-read every frame, so the rule keeps working when the
+    /// game allocates the owning object at a different address.
+    Pointer {
+        width: MemoryWidth,
+        base: u32,
+        offset: u32,
         value: u32,
     },
     Register {
@@ -78,42 +96,67 @@ pub enum CheatRule {
 
 impl CheatRule {
     fn validate(&self, memory: &Memory) -> Result<(), CheatParseError> {
-        let Self::Memory { width, address, .. } = self else {
-            return Ok(());
+        let (width, address) = match *self {
+            Self::Memory { width, address, .. } => (width, address),
+            Self::Pointer { base, .. } => {
+                if base % 4 != 0 {
+                    return Err(CheatParseError::MisalignedPointerBase(base));
+                }
+                if memory.read_u32(base).is_err() || !memory.is_cheat_writable_range(base, 4) {
+                    return Err(CheatParseError::InvalidPointerBase { address: base });
+                }
+                return Ok(());
+            }
+            Self::Register { .. } => return Ok(()),
         };
 
         let bytes = width.bytes();
         if address % bytes != 0 {
-            return Err(CheatParseError::MisalignedAddress(width.bits(), *address));
+            return Err(CheatParseError::MisalignedAddress(width.bits(), address));
         }
 
-        if !memory.is_cheat_writable_range(*address, bytes as usize) {
+        if !memory.is_cheat_writable_range(address, bytes as usize) {
             let end = address.saturating_add(bytes - 1);
-            return Err(CheatParseError::InvalidMemoryRange {
-                address: *address,
-                end,
-            });
+            return Err(CheatParseError::InvalidMemoryRange { address, end });
         }
         Ok(())
     }
 
-    fn apply(&self, memory: &mut Memory, cpu: &mut ArmCpu) {
+    /// Resolve a memory or pointer rule to the address it patches right now.
+    fn resolve_target(&self, memory: &Memory) -> Option<(u32, MemoryWidth, u32)> {
         match *self {
             Self::Memory {
                 width,
                 address,
                 value,
+            } => Some((address, width, value)),
+            Self::Pointer {
+                width,
+                base,
+                offset,
+                value,
             } => {
-                let result = match width {
-                    MemoryWidth::U8 => memory.write_u8(address, value as u8),
-                    MemoryWidth::U16 => memory.write_u16(address, value as u16),
-                    MemoryWidth::U32 => memory.write_u32(address, value),
-                };
-                if let Err(error) = result {
-                    log::warn!("Failed to apply memory cheat at 0x{address:08X}: {error}");
+                let pointer = memory.read_u32(base).ok()?;
+                if pointer == 0 {
+                    return None;
                 }
+                let address = pointer.wrapping_add(offset);
+                let bytes = width.bytes() as usize;
+                if address % width.bytes() != 0 || !memory.is_cheat_writable_range(address, bytes) {
+                    log::debug!(
+                        "Pointer cheat at 0x{base:08X} resolves to unusable address 0x{address:08X}; skipping"
+                    );
+                    return None;
+                }
+                Some((address, width, value))
             }
-            Self::Register { register, value } => match register {
+            Self::Register { .. } => None,
+        }
+    }
+
+    fn apply(&self, memory: &mut Memory, cpu: &mut ArmCpu) {
+        if let Self::Register { register, value } = *self {
+            match register {
                 ArmRegister::General(index) => {
                     cpu.regs.set(index, value);
                     memory.set_register(index as usize, value);
@@ -122,7 +165,23 @@ impl CheatRule {
                     cpu.regs.cpsr = value;
                     memory.set_register(REG_CPSR, value);
                 }
-            },
+            }
+            return;
+        }
+        self.apply_memory(memory);
+    }
+
+    fn apply_memory(&self, memory: &mut Memory) {
+        let Some((address, width, value)) = self.resolve_target(memory) else {
+            return;
+        };
+        let result = match width {
+            MemoryWidth::U8 => memory.write_u8(address, value as u8),
+            MemoryWidth::U16 => memory.write_u16(address, value as u16),
+            MemoryWidth::U32 => memory.write_u32(address, value),
+        };
+        if let Err(error) = result {
+            log::warn!("Failed to apply memory cheat at 0x{address:08X}: {error}");
         }
     }
 }
@@ -158,6 +217,27 @@ impl FromStr for CheatRule {
             }
         }
 
+        for (prefix, width) in [
+            ("ptr8:", MemoryWidth::U8),
+            ("ptr16:", MemoryWidth::U16),
+            ("ptr32:", MemoryWidth::U32),
+        ] {
+            if let Some(target) = target_lower.strip_prefix(prefix) {
+                if value > width.max_value() {
+                    return Err(CheatParseError::ValueOutOfRange(width.bits()));
+                }
+                let (base, offset) = target
+                    .split_once('+')
+                    .ok_or_else(|| CheatParseError::InvalidPointerTarget(target.to_string()))?;
+                return Ok(Self::Pointer {
+                    width,
+                    base: parse_u32(base)?,
+                    offset: parse_u32(offset)?,
+                    value: value as u32,
+                });
+            }
+        }
+
         if let Some(register) = target_lower.strip_prefix("reg:") {
             return Ok(Self::Register {
                 register: parse_register(register)?,
@@ -176,6 +256,16 @@ pub struct CheatSlot {
     pub rule: CheatRule,
 }
 
+/// A frozen memory rule whose value the game changed before the next freeze.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CheatClobber {
+    pub index: u32,
+    pub width: MemoryWidth,
+    pub address: u32,
+    pub expected: u32,
+    pub actual: u32,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CheatManager {
     slots: BTreeMap<u32, CheatSlot>,
@@ -187,6 +277,7 @@ impl CheatManager {
     }
 
     pub fn clear(&mut self) {
+        log::debug!("Cleared {} cheat slots", self.slots.len());
         self.slots.clear();
     }
 
@@ -205,6 +296,7 @@ impl CheatManager {
 
         let rule = CheatRule::from_str(code)?;
         rule.validate(memory)?;
+        log::debug!("Cheat slot {index} set: enabled={enabled} code='{code}'");
         self.slots.insert(
             index,
             CheatSlot {
@@ -238,10 +330,83 @@ impl CheatManager {
         self.slots.is_empty()
     }
 
+    /// Report enabled memory rules whose value differs from the frozen one.
+    ///
+    /// Enabled memory and pointer rules write-protect their address, so this
+    /// normally stays empty. A non-empty report means a writer bypassed the
+    /// normal CPU write path, such as a frontend writing through a raw memory
+    /// pointer. Call this before [`Self::apply`] to inspect the state left by
+    /// such a writer.
+    pub fn detect_clobbered(&self, memory: &Memory) -> Vec<CheatClobber> {
+        let mut clobbered = Vec::new();
+        for (&index, slot) in &self.slots {
+            if !slot.enabled {
+                continue;
+            }
+            let Some((address, width, value)) = slot.rule.resolve_target(memory) else {
+                continue;
+            };
+            let actual = match width {
+                MemoryWidth::U8 => memory.read_u8(address).map(u32::from),
+                MemoryWidth::U16 => memory.read_u16(address).map(u32::from),
+                MemoryWidth::U32 => memory.read_u32(address),
+            };
+            if let Ok(actual) = actual {
+                if actual != value {
+                    clobbered.push(CheatClobber {
+                        index,
+                        width,
+                        address,
+                        expected: value,
+                        actual,
+                    });
+                }
+            }
+        }
+        clobbered
+    }
+
     pub fn apply(&self, memory: &mut Memory, cpu: &mut ArmCpu) {
         for slot in self.slots.values().filter(|slot| slot.enabled) {
             slot.rule.apply(memory, cpu);
         }
+    }
+
+    /// Apply enabled memory and pointer rules without touching CPU registers.
+    pub fn apply_memory(&self, memory: &mut Memory) {
+        for slot in self.slots.values().filter(|slot| slot.enabled) {
+            match slot.rule {
+                CheatRule::Memory { .. } | CheatRule::Pointer { .. } => {
+                    slot.rule.apply_memory(memory);
+                }
+                CheatRule::Register { .. } => {}
+            }
+        }
+    }
+
+    /// Whether an enabled rule resolves its address through a pointer.
+    pub fn has_pointer_rules(&self) -> bool {
+        self.slots
+            .values()
+            .any(|slot| slot.enabled && matches!(slot.rule, CheatRule::Pointer { .. }))
+    }
+
+    /// Write-protected ranges for every enabled memory or pointer rule.
+    ///
+    /// Pointer rules resolve against the current memory contents, so callers
+    /// must pass the live memory to keep them in sync with a moved object.
+    pub fn frozen_ranges(&self, memory: &Memory) -> Vec<FrozenRange> {
+        self.slots
+            .values()
+            .filter(|slot| slot.enabled)
+            .filter_map(|slot| {
+                slot.rule
+                    .resolve_target(memory)
+                    .map(|(address, width, value)| {
+                        FrozenRange::new(address, value, width.bytes() as u8)
+                    })
+            })
+            .collect()
     }
 }
 
@@ -375,6 +540,51 @@ mod tests {
     }
 
     #[test]
+    fn detects_enabled_memory_rules_overwritten_before_the_next_freeze() {
+        let mut memory = memory();
+        let mut cheats = CheatManager::new();
+        let wide = RAM_BASE + 0x200;
+        cheats.set_slot(0, true, "mem8:0x100=1", &memory).unwrap();
+        cheats.set_slot(1, false, "mem8:0x101=2", &memory).unwrap();
+        cheats
+            .set_slot(2, true, &format!("mem32:0x{wide:08X}=0x11223344"), &memory)
+            .unwrap();
+        cheats.set_slot(3, true, "reg:r0=7", &memory).unwrap();
+
+        memory.write_u8(0x100, 1).unwrap();
+        memory.write_u32(wide, 0x1122_3344).unwrap();
+        assert!(cheats.detect_clobbered(&memory).is_empty());
+
+        memory.write_u8(0x100, 9).unwrap();
+        memory.write_u8(0x101, 9).unwrap();
+        memory.write_u32(wide, 0x5566_7788).unwrap();
+
+        assert_eq!(
+            cheats.detect_clobbered(&memory),
+            vec![
+                CheatClobber {
+                    index: 0,
+                    width: MemoryWidth::U8,
+                    address: 0x100,
+                    expected: 1,
+                    actual: 9,
+                },
+                CheatClobber {
+                    index: 2,
+                    width: MemoryWidth::U32,
+                    address: wide,
+                    expected: 0x1122_3344,
+                    actual: 0x5566_7788,
+                },
+            ]
+        );
+
+        let mut cpu = ArmCpu::new().unwrap();
+        cheats.apply(&mut memory, &mut cpu);
+        assert!(cheats.detect_clobbered(&memory).is_empty());
+    }
+
+    #[test]
     fn slots_can_be_replaced_disabled_removed_and_cleared() {
         let memory = memory();
         let mut cheats = CheatManager::new();
@@ -389,5 +599,108 @@ mod tests {
         cheats.add_code("reg:r0=1", &memory).unwrap();
         cheats.clear();
         assert!(cheats.is_empty());
+    }
+
+    #[test]
+    fn exposes_frozen_ranges_for_enabled_memory_rules() {
+        let memory = memory();
+        let mut cheats = CheatManager::new();
+        cheats
+            .set_slot(0, true, "mem16:0x00001000=30", &memory)
+            .unwrap();
+        cheats
+            .set_slot(1, false, "mem8:0x00002000=1", &memory)
+            .unwrap();
+        cheats.set_slot(2, true, "reg:r0=1", &memory).unwrap();
+        cheats
+            .set_slot(3, true, "mem32:0x00003000=0xCAFEBABE", &memory)
+            .unwrap();
+
+        let ranges = cheats.frozen_ranges(&memory);
+        assert_eq!(ranges.len(), 2);
+        assert_eq!(
+            (
+                ranges[0].address(),
+                ranges[0].value(),
+                ranges[0].width_bytes()
+            ),
+            (0x1000, 30, 2)
+        );
+        assert_eq!(
+            (
+                ranges[1].address(),
+                ranges[1].value(),
+                ranges[1].width_bytes()
+            ),
+            (0x3000, 0xCAFE_BABE, 4)
+        );
+    }
+
+    #[test]
+    fn parses_pointer_rules() {
+        assert_eq!(
+            CheatRule::from_str("ptr16:0x00001000+0x20=300").unwrap(),
+            CheatRule::Pointer {
+                width: MemoryWidth::U16,
+                base: 0x1000,
+                offset: 0x20,
+                value: 300,
+            }
+        );
+        assert_eq!(
+            CheatRule::from_str("ptr8:0x1000+4=255").unwrap(),
+            CheatRule::Pointer {
+                width: MemoryWidth::U8,
+                base: 0x1000,
+                offset: 4,
+                value: 255,
+            }
+        );
+        assert_eq!(
+            CheatRule::from_str("ptr8:0x1000+4=256").unwrap_err(),
+            CheatParseError::ValueOutOfRange(8)
+        );
+        assert!(matches!(
+            CheatRule::from_str("ptr16:0x1000=1").unwrap_err(),
+            CheatParseError::InvalidPointerTarget(_)
+        ));
+    }
+
+    #[test]
+    fn pointer_rules_follow_the_stored_address() {
+        let mut memory = memory();
+        let base = RAM_BASE + 0x1000;
+        let first = RAM_BASE + 0x2000;
+        let second = RAM_BASE + 0x3000;
+        memory.write_u32(base, first).unwrap();
+
+        let mut cheats = CheatManager::new();
+        cheats
+            .set_slot(0, true, &format!("ptr16:0x{base:08X}+0x10=300"), &memory)
+            .unwrap();
+        assert_eq!(cheats.frozen_ranges(&memory)[0].address(), first + 0x10);
+
+        memory.write_u32(base, second).unwrap();
+        assert_eq!(cheats.frozen_ranges(&memory)[0].address(), second + 0x10);
+
+        let mut cpu = ArmCpu::new().unwrap();
+        cheats.apply(&mut memory, &mut cpu);
+        assert_eq!(memory.read_u16(first + 0x10).unwrap(), 0);
+        assert_eq!(memory.read_u16(second + 0x10).unwrap(), 300);
+    }
+
+    #[test]
+    fn null_pointer_rules_are_skipped_until_the_game_initializes_them() {
+        let mut memory = memory();
+        let base = RAM_BASE + 0x1000;
+        let mut cheats = CheatManager::new();
+        cheats
+            .set_slot(0, true, &format!("ptr16:0x{base:08X}+0x10=300"), &memory)
+            .unwrap();
+
+        assert!(cheats.frozen_ranges(&memory).is_empty());
+        let mut cpu = ArmCpu::new().unwrap();
+        cheats.apply(&mut memory, &mut cpu);
+        assert_eq!(memory.read_u16(RAM_BASE + 0x10).unwrap(), 0);
     }
 }

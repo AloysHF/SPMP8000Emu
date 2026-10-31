@@ -20,6 +20,24 @@ use crate::input_handler::InputHandler;
 use crate::memory::{self, Memory};
 use crate::renderer::Renderer;
 
+fn cheat_trace_enabled() -> bool {
+    static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("SPMP8000_CHEAT_TRACE").is_some())
+}
+
+fn report_clobbered_cheats(cheats: &CheatManager, memory: &Memory) {
+    for clobber in cheats.detect_clobbered(memory) {
+        log::info!(
+            "Cheat slot {}: mem{} at 0x{:08X} is {} (frozen at {}); the game overwrote it during the frame",
+            clobber.index,
+            clobber.width.bits(),
+            clobber.address,
+            clobber.actual,
+            clobber.expected
+        );
+    }
+}
+
 /// Platform-independent emulator core
 #[derive(Debug)]
 pub struct Emulator {
@@ -197,7 +215,9 @@ impl Emulator {
 
     /// Add an enabled cheat using the next available frontend slot.
     pub fn add_cheat(&mut self, code: &str) -> Result<u32, CheatParseError> {
-        self.cheats.add_code(code, &self.memory)
+        let index = self.cheats.add_code(code, &self.memory)?;
+        self.sync_cheat_freezes();
+        Ok(index)
     }
 
     /// Set, disable, replace, or remove a frontend-managed cheat slot.
@@ -207,12 +227,32 @@ impl Emulator {
         enabled: bool,
         code: &str,
     ) -> Result<(), CheatParseError> {
-        self.cheats.set_slot(index, enabled, code, &self.memory)
+        self.cheats.set_slot(index, enabled, code, &self.memory)?;
+        self.sync_cheat_freezes();
+        Ok(())
     }
 
     /// Remove all frontend-managed cheat slots.
     pub fn clear_cheats(&mut self) {
         self.cheats.clear();
+        self.sync_cheat_freezes();
+    }
+
+    /// Apply enabled rules and refresh the write-protected memory ranges.
+    fn sync_cheat_freezes(&mut self) {
+        let ranges = self.cheats.frozen_ranges(&self.memory);
+        self.memory.set_frozen_ranges(ranges);
+        self.cheats.apply(&mut self.memory, &mut self.cpu);
+    }
+
+    /// Re-resolve pointer cheats before the frame so a moved object stays frozen.
+    fn refresh_pointer_freezes(&mut self) {
+        if !self.cheats.has_pointer_rules() {
+            return;
+        }
+        let ranges = self.cheats.frozen_ranges(&self.memory);
+        self.memory.set_frozen_ranges(ranges);
+        self.cheats.apply_memory(&mut self.memory);
     }
 
     /// Execute one frame (30fps)
@@ -223,6 +263,9 @@ impl Emulator {
         if !self.is_running {
             return;
         }
+
+        // Pointer rules must be resolved against this frame's memory state.
+        self.refresh_pointer_freezes();
 
         // Execute CPU instructions for one frame
         // SPMP8000 runs at ~7.37MHz, so at 30fps that's ~245,760 instructions per frame
@@ -293,6 +336,9 @@ impl Emulator {
         }
 
         // Apply enabled freezes after game logic and before frame outputs.
+        if cheat_trace_enabled() {
+            report_clobbered_cheats(&self.cheats, &self.memory);
+        }
         self.cheats.apply(&mut self.memory, &mut self.cpu);
 
         for command in self.api.take_audio_commands() {
@@ -442,6 +488,7 @@ impl Emulator {
         };
         replacement.set_config(self.config.clone());
         *self = replacement;
+        self.sync_cheat_freezes();
         log::info!("Emulator state restored");
         Ok(())
     }
@@ -480,6 +527,7 @@ impl Emulator {
         std::mem::swap(&mut self.memory, &mut replacement.memory);
         replacement.cheats = self.cheats.clone();
         *self = replacement;
+        self.sync_cheat_freezes();
         log::info!("Emulator reset");
         Ok(())
     }
@@ -635,7 +683,7 @@ mod tests {
         emu.cpu.instruction_count = 123;
         emu.cpu.set_register(4, 0xDEAD_BEEF).unwrap();
         emu.memory
-            .write_u32(RAM_BASE + 0x1000, 0x1111_1111)
+            .write_u32(RAM_BASE + 0x1004, 0x1111_1111)
             .unwrap();
         emu.memory.write_u32(VRAM_BASE, 0x2222_2222).unwrap();
         emu.memory.write_u32(PERIPHERAL_BASE, 0x3333_3333).unwrap();
@@ -683,7 +731,8 @@ mod tests {
             emu.memory.read_u32(FUNC_TABLE_BASE).unwrap(),
             initial_trampoline
         );
-        assert_eq!(emu.memory.read_u32(RAM_BASE + 0x1000).unwrap(), 0);
+        assert_eq!(emu.memory.read_u32(RAM_BASE + 0x1004).unwrap(), 0);
+        assert_eq!(emu.memory.read_u8(RAM_BASE + 0x1000).unwrap(), 99);
         assert_eq!(emu.memory.read_u32(VRAM_BASE).unwrap(), 0);
         assert_eq!(emu.memory.read_u32(PERIPHERAL_BASE).unwrap(), 0);
         assert_eq!(emu.api.framebuffer_addr, None);
@@ -731,6 +780,44 @@ mod tests {
             emu.memory.read_u32(memory::CODE_LOAD_ADDR).unwrap(),
             0x0403_0201
         );
+    }
+
+    #[test]
+    fn frozen_memory_rejects_writes_until_the_rule_is_disabled() {
+        let mut emu = test_emulator(0);
+        emu.add_cheat("mem16:0x00001000=30").unwrap();
+
+        emu.memory.write_u16(RAM_BASE + 0x1000, 0).unwrap();
+        assert_eq!(emu.memory.read_u16(RAM_BASE + 0x1000).unwrap(), 30);
+
+        emu.memory
+            .write_u32(RAM_BASE + 0x1000, 0xDEAD_BEEF)
+            .unwrap();
+        assert_eq!(emu.memory.read_u16(RAM_BASE + 0x1000).unwrap(), 30);
+
+        emu.set_cheat_slot(0, false, "mem16:0x00001000=30").unwrap();
+        emu.memory.write_u16(RAM_BASE + 0x1000, 7).unwrap();
+        assert_eq!(emu.memory.read_u16(RAM_BASE + 0x1000).unwrap(), 7);
+    }
+
+    #[test]
+    fn pointer_cheats_follow_the_object_across_frames() {
+        let mut emu = test_emulator(100);
+        let base = RAM_BASE + 0x2000;
+        let first = RAM_BASE + 0x3000;
+        let second = RAM_BASE + 0x4000;
+        emu.memory.write_u32(base, first).unwrap();
+        emu.add_cheat(&format!("ptr16:0x{base:08X}+0x10=300"))
+            .unwrap();
+        assert_eq!(emu.memory.read_u16(first + 0x10).unwrap(), 300);
+
+        emu.memory.write_u32(base, second).unwrap();
+        emu.start();
+        emu.tick();
+        assert_eq!(emu.memory.read_u16(second + 0x10).unwrap(), 300);
+
+        emu.memory.write_u16(second + 0x10, 7).unwrap();
+        assert_eq!(emu.memory.read_u16(second + 0x10).unwrap(), 300);
     }
 
     #[test]
@@ -919,7 +1006,7 @@ mod tests {
 
         emu.deserialize(&state).unwrap();
 
-        assert_eq!(emu.memory.read_u32(address).unwrap(), 7);
+        assert_eq!(emu.memory.read_u32(address).unwrap(), 22);
         assert_eq!(emu.cheats.get_slot(0).unwrap().code, "mem32:0x00002000=22");
         assert_eq!(
             emu.memory.system_ram_mut().unwrap().as_mut_ptr(),
@@ -939,7 +1026,7 @@ mod tests {
     }
 
     #[test]
-    fn enabled_cheats_are_applied_at_the_end_of_a_running_frame() {
+    fn enabled_cheats_are_applied_and_held_across_a_frame() {
         let mut emu = test_emulator(100);
         emu.set_cheat_slot(0, true, "mem8:0x1000=99").unwrap();
         emu.set_cheat_slot(1, true, "reg:r4=0x12345678").unwrap();
