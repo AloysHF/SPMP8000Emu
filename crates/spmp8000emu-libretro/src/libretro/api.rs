@@ -12,7 +12,7 @@ use spmp8000emu_core::input_handler::Button;
 use spmp8000emu_core::memory::{
     Memory, PERIPHERAL_BASE, PERIPHERAL_SIZE, RAM_BASE, RAM_SIZE, VRAM_BASE, VRAM_SIZE,
 };
-use std::ffi::{c_void, CStr};
+use std::ffi::{c_char, c_void, CStr};
 use std::ptr;
 
 const PERFORMANCE_LEVEL: u32 = 4;
@@ -117,7 +117,7 @@ pub extern "C" fn retro_get_system_info(info: *mut retro_system_info) {
     guard((), || unsafe {
         (*info) = retro_system_info {
             library_name: c"SPMP8000Emu".as_ptr(),
-            library_version: c"1.0.0".as_ptr(),
+            library_version: concat!(env!("CARGO_PKG_VERSION"), "\0").as_ptr() as *const c_char,
             valid_extensions: c"bin".as_ptr(),
             need_fullpath: true,
             block_extract: false,
