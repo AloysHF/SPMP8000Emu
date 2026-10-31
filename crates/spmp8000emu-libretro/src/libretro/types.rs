@@ -118,6 +118,14 @@ pub struct retro_log_callback {
     pub log: retro_log_printf_t,
 }
 
+/// On-screen message shown by the frontend (RETRO_ENVIRONMENT_SET_MESSAGE).
+#[repr(C)]
+pub struct retro_message {
+    pub msg: *const c_char,
+    /// Duration in frames.
+    pub frames: u32,
+}
+
 // Callback function types
 pub type retro_environment_t = unsafe extern "C" fn(cmd: u32, data: *mut std::ffi::c_void) -> bool;
 pub type retro_video_refresh_t =

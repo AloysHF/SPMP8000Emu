@@ -117,11 +117,11 @@ pub extern "C" fn retro_load_game(info: *const retro_game_info) -> bool {
             // need_fullpath is true, so a file path is the only supported input.
             // Memory buffers cannot be mapped into the NGame loader, which reads
             // the file, parses its header and derives the game directory.
-            log::error!(
-                "SPMP8000Emu requires a file path: in-memory content is not supported \
-                 (need_fullpath = true); pass the .bin content as a filesystem path"
+            return fail(
+                "SPMP8000Emu: no content path was provided.\n\n\
+                 This core loads games from a file (need_fullpath); in-memory content \
+                 is not supported. Select a .bin game file in the frontend.",
             );
-            return false;
         }
         if !game_info.data.is_null() || game_info.size != 0 {
             log::warn!(
@@ -132,8 +132,10 @@ pub extern "C" fn retro_load_game(info: *const retro_game_info) -> bool {
         let path = match CStr::from_ptr(game_info.path).to_str() {
             Ok(p) => p,
             Err(e) => {
-                log::error!("Invalid game path: {}", e);
-                return false;
+                return fail(&format!(
+                    "SPMP8000Emu: the content path is not valid UTF-8 ({e}).\n\n\
+                     Move the game to a path the frontend can represent and load it again."
+                ));
             }
         };
 
@@ -144,8 +146,11 @@ pub extern "C" fn retro_load_game(info: *const retro_game_info) -> bool {
             &pixel_format as *const _ as *mut c_void,
         );
         if !success {
-            log::error!("Failed to set pixel format");
-            return false;
+            return fail(
+                "SPMP8000Emu: the frontend refused the XRGB8888 pixel format.\n\n\
+                 RetroDroid supports RGB565, RGB1555 and XRGB8888; update the \
+                 frontend or use a compatible core build.",
+            );
         }
 
         register_input_descriptors();
@@ -154,6 +159,16 @@ pub extern "C" fn retro_load_game(info: *const retro_game_info) -> bool {
             RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL,
             &PERFORMANCE_LEVEL as *const _ as *mut c_void,
         );
+
+        let content_path = std::path::Path::new(path);
+        if !content_path.is_file() {
+            return fail(&format!(
+                "SPMP8000Emu: content file not found:\n{path}\n\n\
+                 The core loads .bin content from that exact path. RetroDroid \
+                 copies the SAF selection into its app-private cache before \
+                 loading, so the file must still exist and be readable there."
+            ));
+        }
 
         let config = read_core_config();
         super::logger::set_debug_logging(config.debug_logging);
@@ -169,12 +184,19 @@ pub extern "C" fn retro_load_game(info: *const retro_game_info) -> bool {
                 register_memory_maps(get_emulator_mut());
                 true
             }
-            Err(e) => {
-                log::error!("Failed to load game: {}", e);
-                false
-            }
+            Err(e) => fail(&format!(
+                "SPMP8000Emu: failed to load content:\n{path}\n{e:#}\n\n\
+                 Only NGame .bin games are supported."
+            )),
         }
     }
+}
+
+/// Report a load failure to both the log and the frontend's on-screen message.
+fn fail(message: &str) -> bool {
+    log::error!("{message}");
+    callbacks::show_message(message, 240);
+    false
 }
 
 #[no_mangle]
@@ -294,7 +316,10 @@ pub extern "C" fn retro_load_game_special(
     _info: *const retro_game_info,
     _num: usize,
 ) -> bool {
-    false
+    fail(
+        "SPMP8000Emu: special content loading is not supported.\n\n\
+         Load the NGame .bin game directly.",
+    )
 }
 
 #[no_mangle]
