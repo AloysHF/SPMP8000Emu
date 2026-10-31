@@ -52,3 +52,31 @@ cargo ndk -t arm64-v8a -t armeabi-v7a -t x86 -t x86_64 --platform 21 \
 Each ABI produces `libspmp8000emu.so`; rename it to
 `spmp8000emu_libretro_android.so` when installing into RetroArch on Android.
 The CI release workflow performs this packaging automatically.
+
+## RetroDroid
+
+The same core ships inside [RetroDroid](https://github.com/AloysHF/RetroDroid),
+the all-in-one Android app for this emulator family. RetroDroid loads
+`libspmp8000emu.so` directly (no RetroArch required) and reads the neighbouring
+`android.json` for the system profile: display names, content extensions,
+virtual-controller preset, firmware requirements and orientation.
+
+Rules the core follows for any Android host:
+
+- Content is loaded from the path supplied by the frontend (`need_fullpath`);
+  in-memory buffers are rejected. RetroDroid copies the SAF selection into an
+  app-private cache before loading, so the core never writes beside the content.
+- SPMP8000 content needs no firmware and produces no battery save files. Any
+  future save data would go to `RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY`, and any
+  firmware or user-visible assets to `RETRO_ENVIRONMENT_GET_SYSTEM_DIRECTORY`;
+  neither directory is read or written today.
+- Load failures are reported with `RETRO_ENVIRONMENT_SET_MESSAGE` and the log
+  interface, naming the content file and the path the core expected, never as
+  a silent `false`.
+- Panics are caught at the C ABI boundary, so a bad frame cannot kill the host.
+  The release profile keeps `panic = "unwind"`; only the wasm profile aborts.
+- Save states carry an `SP8S` magic header plus a little-endian format version
+  (`1`); states from another system or version are rejected instead of being
+  misread. The serialized payload keeps the core's existing layout.
+- Cores are linked with 16 KB page alignment
+  (`-C link-arg=-Wl,-z,max-page-size=16384`) for Android 15 devices.
