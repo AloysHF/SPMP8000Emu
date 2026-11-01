@@ -36,6 +36,9 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 opt-level = 3
 lto = true
 strip = true
+# libretro hosts (including Android) catch panics at the C ABI boundary, so the
+# release profile must unwind. Only the browser profile below may abort.
+panic = "unwind"
 
 # Used by `scripts/build-emulatorjs-core.sh` for wasm32-unknown-emscripten.
 # Unwinding is unsupported in the browser build, so abort on panic.

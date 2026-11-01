@@ -12,7 +12,7 @@ use spmp8000emu_core::input_handler::Button;
 use spmp8000emu_core::memory::{
     Memory, PERIPHERAL_BASE, PERIPHERAL_SIZE, RAM_BASE, RAM_SIZE, VRAM_BASE, VRAM_SIZE,
 };
-use std::ffi::{c_void, CStr};
+use std::ffi::{c_char, c_void, CStr};
 use std::ptr;
 
 const PERFORMANCE_LEVEL: u32 = 4;
@@ -30,78 +30,106 @@ unsafe fn get_emulator_mut() -> &'static mut Emulator {
     EMULATOR.as_mut().expect("Emulator not initialized")
 }
 
+/// Run `body`, turning a panic into `fallback`.
+///
+/// A panic must never unwind across the C ABI: the frontend is a host process
+/// (RetroArch, RetroDroid) that would be torn down with us. Swallowing the
+/// panic keeps the session recoverable and leaves a log entry behind.
+fn guard<T>(fallback: T, body: impl FnOnce() -> T) -> T {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(body)) {
+        Ok(value) => value,
+        Err(payload) => {
+            let detail = payload
+                .downcast_ref::<&str>()
+                .map(|text| (*text).to_owned())
+                .or_else(|| payload.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "unknown panic".to_owned());
+            log::error!("SPMP8000Emu libretro entry point panicked: {detail}");
+            fallback
+        }
+    }
+}
+
 // ============================================================
 // Startup functions
 // ============================================================
 
 #[no_mangle]
 pub extern "C" fn retro_set_environment(cb: retro_environment_t) {
-    callbacks::set_environment(cb);
-    set_core_options();
+    guard((), || {
+        callbacks::set_environment(cb);
+        set_core_options();
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_video_refresh(cb: retro_video_refresh_t) {
-    callbacks::set_video_refresh(cb);
+    guard((), || callbacks::set_video_refresh(cb));
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_audio_sample(cb: retro_audio_sample_t) {
-    callbacks::set_audio_sample(cb);
+    guard((), || callbacks::set_audio_sample(cb));
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_audio_sample_batch(cb: retro_audio_sample_batch_t) {
-    callbacks::set_audio_sample_batch(cb);
+    guard((), || callbacks::set_audio_sample_batch(cb));
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_input_poll(cb: retro_input_poll_t) {
-    callbacks::set_input_poll(cb);
+    guard((), || callbacks::set_input_poll(cb));
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_input_state(cb: retro_input_state_t) {
-    callbacks::set_input_state(cb);
+    guard((), || callbacks::set_input_state(cb));
 }
 
 #[no_mangle]
 pub extern "C" fn retro_api_version() -> u32 {
-    RETRO_API_VERSION
+    guard(RETRO_API_VERSION, || RETRO_API_VERSION)
 }
 
 #[no_mangle]
 pub extern "C" fn retro_init() {
-    callbacks::init_log();
-    super::logger::init();
-    log::info!("SPMP8000Emu libretro core initialized");
+    guard((), || {
+        callbacks::init_log();
+        super::logger::init();
+        log::info!("SPMP8000Emu libretro core initialized");
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_deinit() {
-    unsafe {
-        EMULATOR = None;
-    }
-    super::logger::set_debug_logging(false);
-    log::info!("SPMP8000Emu libretro core deinitialized");
+    guard((), || {
+        unsafe {
+            EMULATOR = None;
+        }
+        super::logger::set_debug_logging(false);
+        log::info!("SPMP8000Emu libretro core deinitialized");
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_get_system_info(info: *mut retro_system_info) {
-    unsafe {
+    guard((), || unsafe {
         (*info) = retro_system_info {
             library_name: c"SPMP8000Emu".as_ptr(),
-            library_version: c"1.0.0".as_ptr(),
+            library_version: concat!(env!("CARGO_PKG_VERSION"), "\0").as_ptr() as *const c_char,
             valid_extensions: c"bin".as_ptr(),
             need_fullpath: true,
             block_extract: false,
         };
-    }
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_set_controller_port_device(_port: u32, _device: u32) {
-    // SPMP8000 only supports basic joypad
+    guard((), || {
+        // SPMP8000 only supports basic joypad.
+    });
 }
 
 // ============================================================
@@ -110,19 +138,23 @@ pub extern "C" fn retro_set_controller_port_device(_port: u32, _device: u32) {
 
 #[no_mangle]
 pub extern "C" fn retro_load_game(info: *const retro_game_info) -> bool {
-    unsafe {
+    guard(false, || unsafe {
+        if info.is_null() {
+            return fail(MISSING_CONTENT_PATH);
+        }
         let game_info = &*info;
 
         if game_info.path.is_null() {
-            log::error!("Game path is null");
-            return false;
+            return fail(MISSING_CONTENT_PATH);
         }
 
         let path = match CStr::from_ptr(game_info.path).to_str() {
             Ok(p) => p,
             Err(e) => {
-                log::error!("Invalid game path: {}", e);
-                return false;
+                return fail(&format!(
+                    "SPMP8000Emu: the content path is not valid UTF-8 ({e}).\n\n\
+                     Move the game to a path the frontend can represent and load it again."
+                ));
             }
         };
 
@@ -133,8 +165,11 @@ pub extern "C" fn retro_load_game(info: *const retro_game_info) -> bool {
             &pixel_format as *const _ as *mut c_void,
         );
         if !success {
-            log::error!("Failed to set pixel format");
-            return false;
+            return fail(
+                "SPMP8000Emu: the frontend refused the XRGB8888 pixel format.\n\n\
+                 RetroDroid supports RGB565, RGB1555 and XRGB8888; update the \
+                 frontend or use a compatible core build.",
+            );
         }
 
         register_input_descriptors();
@@ -143,6 +178,16 @@ pub extern "C" fn retro_load_game(info: *const retro_game_info) -> bool {
             RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL,
             &PERFORMANCE_LEVEL as *const _ as *mut c_void,
         );
+
+        let content_path = std::path::Path::new(path);
+        if !content_path.is_file() {
+            return fail(&format!(
+                "SPMP8000Emu: content file not found:\n{path}\n\n\
+                 The core loads .bin content from that exact path. RetroDroid \
+                 copies the SAF selection into its app-private cache before \
+                 loading, so the file must still exist and be readable there."
+            ));
+        }
 
         let config = read_core_config();
         super::logger::set_debug_logging(config.debug_logging);
@@ -158,25 +203,38 @@ pub extern "C" fn retro_load_game(info: *const retro_game_info) -> bool {
                 register_memory_maps(get_emulator_mut());
                 true
             }
-            Err(e) => {
-                log::error!("Failed to load game: {}", e);
-                false
-            }
+            Err(e) => fail(&format!(
+                "SPMP8000Emu: failed to load content:\n{path}\n{e:#}\n\n\
+                 Only NGame .bin games are supported."
+            )),
         }
-    }
+    })
+}
+
+/// The error reported when the frontend supplies no content path.
+const MISSING_CONTENT_PATH: &str =
+    "The frontend passed no content path; this core loads content from a file path only.";
+
+/// Report a load failure to both the log and the frontend's on-screen message.
+fn fail(message: &str) -> bool {
+    log::error!("{message}");
+    callbacks::show_message(message, 240);
+    false
 }
 
 #[no_mangle]
 pub extern "C" fn retro_unload_game() {
-    unsafe {
-        EMULATOR = None;
-    }
-    log::info!("Game unloaded");
+    guard((), || {
+        unsafe {
+            EMULATOR = None;
+        }
+        log::info!("Game unloaded");
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_get_system_av_info(info: *mut retro_system_av_info) {
-    unsafe {
+    guard((), || unsafe {
         let emu = get_emulator();
         let (width, height) = emu.get_resolution();
         let sample_rate = emu.get_audio_sample_rate();
@@ -194,12 +252,12 @@ pub extern "C" fn retro_get_system_av_info(info: *mut retro_system_av_info) {
                 sample_rate,
             },
         };
-    }
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_run() {
-    unsafe {
+    guard((), || unsafe {
         if core_options_changed() {
             let config = read_core_config();
             super::logger::set_debug_logging(config.debug_logging);
@@ -259,7 +317,7 @@ pub extern "C" fn retro_run() {
         if !samples.is_empty() {
             callbacks::audio_sample_batch(samples.as_ptr(), samples.len() / 2);
         }
-    }
+    });
 }
 
 fn log_core_config(action: &str, config: &CoreConfig) {
@@ -283,44 +341,77 @@ pub extern "C" fn retro_load_game_special(
     _info: *const retro_game_info,
     _num: usize,
 ) -> bool {
-    false
+    guard(false, || {
+        fail(
+            "SPMP8000Emu: special content loading is not supported.\n\n\
+             Load the NGame .bin game directly.",
+        )
+    })
+}
+
+/// Save-state envelope: 4-byte magic followed by a little-endian format
+/// version. The serialized payload itself keeps the core's existing layout and
+/// is passed through unchanged; bump the version only when the payload format
+/// changes, so stale states are rejected instead of silently misread.
+const SAVE_STATE_MAGIC: [u8; 4] = *b"SP8S";
+const SAVE_STATE_FORMAT: u32 = 1;
+const SAVE_STATE_HEADER_LEN: usize = SAVE_STATE_MAGIC.len() + std::mem::size_of::<u32>();
+
+fn write_save_state_header(buffer: &mut [u8]) {
+    buffer[..SAVE_STATE_MAGIC.len()].copy_from_slice(&SAVE_STATE_MAGIC);
+    buffer[SAVE_STATE_MAGIC.len()..SAVE_STATE_HEADER_LEN]
+        .copy_from_slice(&SAVE_STATE_FORMAT.to_le_bytes());
+}
+
+/// Returns `Some(payload)` when the envelope matches this build's format.
+fn read_save_state_payload(data: &[u8]) -> Option<&[u8]> {
+    if data.len() < SAVE_STATE_HEADER_LEN || data[..SAVE_STATE_MAGIC.len()] != SAVE_STATE_MAGIC {
+        return None;
+    }
+    let version = u32::from_le_bytes(
+        data[SAVE_STATE_MAGIC.len()..SAVE_STATE_HEADER_LEN]
+            .try_into()
+            .ok()?,
+    );
+    (version == SAVE_STATE_FORMAT).then(|| &data[SAVE_STATE_HEADER_LEN..])
 }
 
 #[no_mangle]
 pub extern "C" fn retro_serialize_size() -> usize {
-    unsafe {
+    guard(0, || unsafe {
         match EMULATOR.as_ref() {
-            Some(emu) => emu.serialize_size(),
+            Some(emu) => emu.serialize_size() + SAVE_STATE_HEADER_LEN,
             None => 0,
         }
-    }
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn retro_serialize(data: *mut c_void, size: usize) -> bool {
-    unsafe {
+    guard(false, || unsafe {
         let Some(emu) = EMULATOR.as_ref() else {
             return false;
         };
-        let required_size = emu.serialize_size();
+        let required_size = emu.serialize_size() + SAVE_STATE_HEADER_LEN;
         if data.is_null() || size < required_size {
             return false;
         }
 
         let buffer = std::slice::from_raw_parts_mut(data as *mut u8, required_size);
-        match emu.serialize(buffer) {
+        write_save_state_header(buffer);
+        match emu.serialize(&mut buffer[SAVE_STATE_HEADER_LEN..]) {
             Ok(()) => true,
             Err(error) => {
                 log::error!("Failed to serialize game state: {}", error);
                 false
             }
         }
-    }
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn retro_unserialize(data: *const c_void, size: usize) -> bool {
-    unsafe {
+    guard(false, || unsafe {
         let Some(emu) = EMULATOR.as_mut() else {
             return false;
         };
@@ -329,33 +420,37 @@ pub extern "C" fn retro_unserialize(data: *const c_void, size: usize) -> bool {
         }
 
         let buffer = std::slice::from_raw_parts(data as *const u8, size);
-        match emu.deserialize(buffer) {
+        let Some(payload) = read_save_state_payload(buffer) else {
+            log::warn!("Rejecting save state with an unknown magic or format version");
+            return false;
+        };
+        match emu.deserialize(payload) {
             Ok(()) => true,
             Err(error) => {
                 log::error!("Failed to restore game state: {}", error);
                 false
             }
         }
-    }
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn retro_get_region() -> u32 {
-    RETRO_REGION_NTSC
+    guard(RETRO_REGION_NTSC, || RETRO_REGION_NTSC)
 }
 
 #[no_mangle]
 pub extern "C" fn retro_cheat_reset() {
-    unsafe {
+    guard((), || unsafe {
         if let Some(emu) = EMULATOR.as_mut() {
             emu.clear_cheats();
         }
-    }
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_cheat_set(index: u32, enabled: bool, code: *const std::ffi::c_char) {
-    unsafe {
+    guard((), || unsafe {
         let Some(emu) = EMULATOR.as_mut() else {
             return;
         };
@@ -379,12 +474,12 @@ pub extern "C" fn retro_cheat_set(index: u32, enabled: bool, code: *const std::f
                 error
             );
         }
-    }
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_reset() {
-    unsafe {
+    guard((), || unsafe {
         if let Some(emu) = EMULATOR.as_mut() {
             match emu.reset() {
                 Ok(()) => {
@@ -394,12 +489,12 @@ pub extern "C" fn retro_reset() {
                 Err(error) => log::error!("Failed to reset game: {}", error),
             }
         }
-    }
+    });
 }
 
 #[no_mangle]
 pub extern "C" fn retro_get_memory_data(id: u32) -> *mut c_void {
-    unsafe {
+    guard(ptr::null_mut(), || unsafe {
         let Some(emu) = EMULATOR.as_mut() else {
             return ptr::null_mut();
         };
@@ -414,12 +509,12 @@ pub extern "C" fn retro_get_memory_data(id: u32) -> *mut c_void {
                 .map_or(ptr::null_mut(), |vram| vram.as_mut_ptr().cast()),
             _ => ptr::null_mut(),
         }
-    }
+    })
 }
 
 #[no_mangle]
 pub extern "C" fn retro_get_memory_size(id: u32) -> usize {
-    unsafe {
+    guard(0, || unsafe {
         let Some(emu) = EMULATOR.as_ref() else {
             return 0;
         };
@@ -428,7 +523,7 @@ pub extern "C" fn retro_get_memory_size(id: u32) -> usize {
             RETRO_MEMORY_VIDEO_RAM => emu.memory.video_ram().map_or(0, <[u8]>::len),
             _ => 0,
         }
-    }
+    })
 }
 
 fn memory_descriptors(memory: &mut Memory) -> Option<[retro_memory_descriptor; 3]> {
@@ -771,6 +866,40 @@ mod tests {
             cmd,
             RETRO_ENVIRONMENT_GET_VARIABLE | RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE
         )
+    }
+
+    #[test]
+    fn save_state_envelope_rejects_other_versions() {
+        let mut buffer = [0_u8; SAVE_STATE_HEADER_LEN + 3];
+        buffer[SAVE_STATE_HEADER_LEN..].copy_from_slice(&[1, 2, 3]);
+        write_save_state_header(&mut buffer);
+        assert_eq!(
+            read_save_state_payload(&buffer),
+            Some(&[1_u8, 2, 3][..]),
+            "a freshly written envelope must be accepted"
+        );
+
+        buffer[SAVE_STATE_MAGIC.len()] = 0xFF;
+        assert_eq!(
+            read_save_state_payload(&buffer),
+            None,
+            "a state from another format version must be rejected"
+        );
+
+        let truncated = [0_u8; SAVE_STATE_HEADER_LEN - 1];
+        assert_eq!(
+            read_save_state_payload(&truncated),
+            None,
+            "a buffer shorter than the envelope must be rejected"
+        );
+
+        let mut foreign = [0_u8; SAVE_STATE_HEADER_LEN];
+        foreign[..SAVE_STATE_MAGIC.len()].copy_from_slice(b"N32S");
+        assert_eq!(
+            read_save_state_payload(&foreign),
+            None,
+            "a state from another system must be rejected"
+        );
     }
 
     #[test]

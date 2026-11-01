@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "core": "spmp8000emu",
+  "so_name": "libspmp8000emu.so",
+  "system": "spmp8000",
+  "display_name": {
+    "en": "SPMP8000",
+    "zh": "凌阳 SPMP8000"
+  },
+  "short_name": "SPMP8000",
+  "manufacturer": "Sunplus",
+  "supported_extensions": ["bin"],
+  "save_state_format": 1,
+  "firmware": [],
+  "input": {
+    "preset": "dpad-ab-select"
+  },
+  "video": {
+    "orientation": "landscape",
+    "pixel_format": "xrgb8888"
+  },
+  "notes": {
+    "en": "Loads NGame .bin games for Sunplus SPMP8000 handhelds and MP4 players. No firmware or BIOS files are required; the core writes no battery saves.",
+    "zh": "加载凌阳 SPMP8000 掌机与 MP4 播放器的 NGame .bin 游戏。无需固件或 BIOS 文件，核心不写入电池存档。"
+  }
+}

@@ -201,3 +201,20 @@ pub fn log_message(level: retro_log_level, msg: &str) {
         None => {}
     }
 }
+
+/// Ask the frontend to show a short on-screen message, for example after a
+/// failed load. Headless frontends may ignore it; callers mirror the text to
+/// the log as well.
+pub fn show_message(msg: &str, frames: u32) {
+    let Ok(c_msg) = std::ffi::CString::new(msg) else {
+        return;
+    };
+    let message = retro_message {
+        msg: c_msg.as_ptr(),
+        frames,
+    };
+    environment(
+        super::constants::RETRO_ENVIRONMENT_SET_MESSAGE,
+        &message as *const _ as *mut c_void,
+    );
+}
