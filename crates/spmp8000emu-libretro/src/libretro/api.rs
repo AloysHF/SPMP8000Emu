@@ -139,22 +139,13 @@ pub extern "C" fn retro_set_controller_port_device(_port: u32, _device: u32) {
 #[no_mangle]
 pub extern "C" fn retro_load_game(info: *const retro_game_info) -> bool {
     guard(false, || unsafe {
+        if info.is_null() {
+            return fail(MISSING_CONTENT_PATH);
+        }
         let game_info = &*info;
 
         if game_info.path.is_null() {
-            // need_fullpath is true, so a file path is the only supported input.
-            // Memory buffers cannot be mapped into the NGame loader, which reads
-            // the file, parses its header and derives the game directory.
-            return fail(
-                "SPMP8000Emu: no content path was provided.\n\n\
-                 This core loads games from a file (need_fullpath); in-memory content \
-                 is not supported. Select a .bin game file in the frontend.",
-            );
-        }
-        if !game_info.data.is_null() || game_info.size != 0 {
-            log::warn!(
-                "Ignoring the in-memory buffer supplied for content; loading from the path instead"
-            );
+            return fail(MISSING_CONTENT_PATH);
         }
 
         let path = match CStr::from_ptr(game_info.path).to_str() {
@@ -219,6 +210,10 @@ pub extern "C" fn retro_load_game(info: *const retro_game_info) -> bool {
         }
     })
 }
+
+/// The error reported when the frontend supplies no content path.
+const MISSING_CONTENT_PATH: &str =
+    "The frontend passed no content path; this core loads content from a file path only.";
 
 /// Report a load failure to both the log and the frontend's on-screen message.
 fn fail(message: &str) -> bool {

@@ -64,7 +64,7 @@ virtual-controller preset, firmware requirements and orientation.
 Rules the core follows for any Android host:
 
 - Content is loaded from the path supplied by the frontend (`need_fullpath`);
-  in-memory buffers are rejected. RetroDroid copies the SAF selection into an
+  an in-memory buffer is ignored. RetroDroid copies the SAF selection into an
   app-private cache before loading, so the core never writes beside the content.
 - SPMP8000 content needs no firmware and produces no battery save files. Any
   future save data would go to `RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY`, and any
