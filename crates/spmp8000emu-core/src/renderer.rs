@@ -82,9 +82,9 @@ impl Renderer {
     fn copy_xrgb8888(&mut self, memory: &Memory, addr: u32) {
         let byte_count = (self.width * self.height * 4) as usize;
 
-        for i in 0..byte_count {
+        for (i, pixel_byte) in self.framebuffer.iter_mut().enumerate().take(byte_count) {
             if let Ok(byte) = memory.read_u8(addr + i as u32) {
-                self.framebuffer[i] = byte;
+                *pixel_byte = byte;
             }
         }
     }
